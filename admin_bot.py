@@ -145,47 +145,6 @@ Silahkan pilih kategori bantuan di bawah ini:
         # Start session checker
         asyncio.create_task(self.check_sessions())
 
-     async def check_sessions(self):
-    """Periodic check for expired/invalid sessions"""
-    while True:
-        try:
-            data = load_data()
-            for user_id, info in data['userbots'].items():
-                if info['active']:
-                    try:
-                        session = StringSession(info['session'])
-                        client = TelegramClient(session, API_ID, API_HASH)
-                        await client.connect()
-                        if not await client.is_user_authorized():
-                            # Session expired
-                            info['active'] = False
-                            # Notify admin
-                            admin_text = f"""
-⚠️ **Session Expired!**
-
-👤 **Detail Userbot:**
-• Nama: `{info['first_name']}`
-• ID: `{user_id}`
-• Owner: `{info['owner_id']}`
-                            """
-                            for admin_id in ADMIN_IDS:
-                                try:
-                                    await self.bot.send_message(admin_id, admin_text, parse_mode='md')
-                                except Exception:
-                                    pass
-                    except Exception as e:
-                        logger.error(f"Session check error for {user_id}: {str(e)}")
-                        info['active'] = False
-                    finally:
-                        try:
-                            await client.disconnect()
-                        except Exception:
-                            pass
-            save_data(data)
-        except Exception as e:
-            logger.error(f"Session check error: {str(e)}")
-        await asyncio.sleep(3600)  # Check every hour
-
      async def show_userbot_list(self, event, page=0):
         """Show list of userbots with pagination"""
         data = load_data()
