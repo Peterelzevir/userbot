@@ -1,4 +1,4 @@
-from telethon import TelegramClient, events, Button
+from telethon import TelegramClient, events, Button, types
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError
@@ -9,6 +9,14 @@ import os
 import math
 import json
 import logging
+import re
+
+# Set up logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 def load_data():
     """Load data from JSON file with error handling"""
@@ -133,6 +141,7 @@ Silahkan pilih kategori bantuan di bawah ini:
 
     async def start(self):
         """Start the bot and register all handlers"""
+        
         @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]start$'))
         async def start_handler(event):
             user_id = event.sender_id
@@ -170,62 +179,37 @@ Silahkan hubungi admin untuk membeli userbot!
             buttons = [[Button.inline("◀️ Kembali", "back_to_start")]]
             await event.edit(text, buttons=buttons)
 
-        @self.bot.on(events.CallbackQuery(pattern=r'^create_userbot'))
-        async def create_userbot_handler(event):
-            user_id = event.sender_id
-            
-            if user_id not in ADMIN_IDS:
-                if not is_premium(user_id):
-                    await not_premium_handler(event)
-                    return
-                
-                data = load_data()
-                for info in data['userbots'].values():
-                    if str(info.get('owner_id')) == str(user_id):
-                        text = f"""
-⚠️ **Anda sudah memiliki userbot!**
+        @self.bot.on(events.CallbackQuery(pattern=r'^broadcast$'))
+        async def broadcast_button_handler(event):
+            if event.sender_id not in ADMIN_IDS:
+                await event.answer("⚠️ Hanya untuk admin!", alert=True)
+                return
 
-🤖 **Detail Userbot:**
-• Nama: `{info['first_name']}`
-• Status: {"🟢 Aktif" if info['active'] else "🔴 Nonaktif"}
-• Dibuat: `{datetime.fromisoformat(info['created_at']).strftime('%Y-%m-%d %H:%M:%S')}`
-• Kadaluarsa: `{datetime.fromisoformat(info['expires_at']).strftime('%Y-%m-%d %H:%M:%S')}`
-                        """
-                        buttons = [[Button.inline("◀️ Kembali", "back_to_start")]]
-                        await event.edit(text, buttons=buttons)
-                        return
+            await event.delete()
+            msg = events.NewMessage.Event(
+                message=types.Message(
+                    id=0, peer_id=types.PeerUser(event.sender_id),
+                    message="/broadcast"
+                )
+            )
+            msg.pattern_match = re.match(r'(?i)[!/\.]broadcast$', "/broadcast")
+            await broadcast_handler(msg)
 
-            async with self.bot.conversation(event.chat_id) as conv:
-                try:
-                    await event.delete()
-                    await conv.send_message("📝 **Masukkan API ID:**")
-                    api_id_msg = await conv.get_response(timeout=300)
-                    api_id = api_id_msg.text.strip()
+        @self.bot.on(events.CallbackQuery(pattern=r'^add_premium$'))
+        async def premium_button_handler(event):
+            if event.sender_id not in ADMIN_IDS:
+                await event.answer("⚠️ Hanya untuk admin!", alert=True)
+                return
 
-                    await conv.send_message("📝 **Masukkan API Hash:**")
-                    api_hash_msg = await conv.get_response(timeout=300)
-                    api_hash = api_hash_msg.text.strip()
-
-                    await conv.send_message("📱 **Masukkan nomor telepon:**")
-                    phone_msg = await conv.get_response(timeout=300)
-                    phone = phone_msg.text.strip()
-
-                    duration = 30 if user_id not in ADMIN_IDS else None
-                    if duration is None:
-                        await conv.send_message("⏳ **Masukkan durasi aktif userbot (dalam hari):**")
-                        duration_msg = await conv.get_response(timeout=300)
-                        try:
-                            duration = int(duration_msg.text.strip())
-                        except ValueError:
-                            await conv.send_message("❌ **Error: Durasi harus berupa angka!**")
-                            return
-
-                    await self.create_new_userbot(conv, phone, api_id, api_hash, duration, user_id)
-                    
-                except asyncio.TimeoutError:
-                    await conv.send_message("❌ **Waktu habis! Silahkan kirim `/start` untuk mencoba lagi.**")
-                except Exception as e:
-                    await conv.send_message(f"❌ **Error:** `{str(e)}`")
+            await event.delete()
+            msg = events.NewMessage.Event(
+                message=types.Message(
+                    id=0, peer_id=types.PeerUser(event.sender_id),
+                    message="/addpremium"
+                )
+            )
+            msg.pattern_match = re.match(r'(?i)[!/\.]addpremium$', "/addpremium")
+            await add_premium_handler(msg)
 
         @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]broadcast$'))
         async def broadcast_handler(event):
@@ -325,94 +309,62 @@ Silahkan hubungi admin untuk membeli userbot!
                 except asyncio.TimeoutError:
                     await conv.send_message("❌ **Waktu habis! Silahkan kirim `/addpremium` untuk mencoba lagi.**")
 
-        async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
-            """Create new userbot session"""
-            try:
-                # Validate inputs
-                try:
-                    api_id = int(api_id)
-                except ValueError:
-                    await conv.send_message("❌ **Error: API ID harus berupa angka!**")
-                    return
-
-                # Create client and connect
-                client = TelegramClient(StringSession(), api_id, api_hash, device_model=APP_VERSION)
-                await client.connect()
-                
-                await conv.send_message("⏳ **Memproses permintaan login...**")
-                
-                try:
-                    code = await client.send_code_request(phone)
-                except Exception as e:
-                    await conv.send_message(f"❌ **Error saat mengirim kode:** `{str(e)}`")
+        @self.bot.on(events.CallbackQuery(pattern=r'^create_userbot$'))
+        async def create_userbot_handler(event):
+            user_id = event.sender_id
+            
+            if user_id not in ADMIN_IDS:
+                if not is_premium(user_id):
+                    await not_premium_handler(event)
                     return
                 
-                await conv.send_message("📲 **Masukkan kode OTP (format: 1 2 3 4 5):**")
-                try:
-                    otp_msg = await conv.get_response(timeout=300)
-                    otp = ''.join(otp_msg.text.split())
-                except asyncio.TimeoutError:
-                    await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
-                    return
-
-                try:
-                    await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
-                except PhoneCodeInvalidError:
-                    await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
-                    return
-                except SessionPasswordNeededError:
-                    await conv.send_message("🔐 **Akun ini menggunakan verifikasi 2 langkah. Silahkan masukkan password:**")
-                    try:
-                        password = await conv.get_response(timeout=300)
-                        await client.sign_in(password=password.text)
-                    except asyncio.TimeoutError:
-                        await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
-                        return
-                    except Exception as e:
-                        await conv.send_message(f"❌ **Error saat login:** `{str(e)}`")
-                        return
-
-                me = await client.get_me()
-                
-                # Save userbot data
                 data = load_data()
-                expiry_date = (datetime.now() + timedelta(days=duration)).isoformat()
-                
-                data['userbots'][str(me.id)] = {
-                    'first_name': me.first_name,
-                    'last_name': me.last_name,
-                    'phone': phone,
-                    'created_at': datetime.now().isoformat(),
-                    'expires_at': expiry_date,
-                    'active': True,
-                    'session': client.session.save(),
-                    'owner_id': owner_id
-                }
-                
-                if save_data(data):
-                    await conv.send_message(f"""
-🤖 **Userbot berhasil dibuat!**
+                for info in data['userbots'].values():
+                    if str(info.get('owner_id')) == str(user_id):
+                        text = f"""
+⚠️ **Anda sudah memiliki userbot!**
 
-👤 **Detail Userbot:**
-• First Name: `{me.first_name}`
-• Last Name: `{me.last_name or 'N/A'}`
-• User ID: `{me.id}`
-• Phone: `{phone}`
-• Created: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`
-• Expires: `{datetime.fromisoformat(expiry_date).strftime('%Y-%m-%d %H:%M:%S')}`
+🤖 **Detail Userbot:**
+• Nama: `{info['first_name']}`
+• Status: {"🟢 Aktif" if info['active'] else "🔴 Nonaktif"}
+• Dibuat: `{datetime.fromisoformat(info['created_at']).strftime('%Y-%m-%d %H:%M:%S')}`
+• Kadaluarsa: `{datetime.fromisoformat(info['expires_at']).strftime('%Y-%m-%d %H:%M:%S')}`
+                        """
+                        buttons = [[Button.inline("◀️ Kembali", "back_to_start")]]
+                        await event.edit(text, buttons=buttons)
+                        return
 
-✅ **Status: Aktif**
-                    """)
-                else:
-                    await conv.send_message("❌ **Error saat menyimpan data userbot!**")
-                
-            except Exception as e:
-                await conv.send_message(f"❌ **Error tidak terduga:** `{str(e)}`")
-            finally:
+            async with self.bot.conversation(event.chat_id) as conv:
                 try:
-                    await client.disconnect()
-                except:
-                    pass
+                    await event.delete()
+                    await conv.send_message("📝 **Masukkan API ID:**")
+                    api_id_msg = await conv.get_response(timeout=300)
+                    api_id = api_id_msg.text.strip()
+
+                    await conv.send_message("📝 **Masukkan API Hash:**")
+                    api_hash_msg = await conv.get_response(timeout=300)
+                    api_hash = api_hash_msg.text.strip()
+
+                    await conv.send_message("📱 **Masukkan nomor telepon:**")
+                    phone_msg = await conv.get_response(timeout=300)
+                    phone = phone_msg.text.strip()
+
+                    duration = 30 if user_id not in ADMIN_IDS else None
+                    if duration is None:
+                        await conv.send_message("⏳ **Masukkan durasi aktif userbot (dalam hari):**")
+                        duration_msg = await conv.get_response(timeout=300)
+                        try:
+                            duration = int(duration_msg.text.strip())
+                        except ValueError:
+                            await conv.send_message("❌ **Error: Durasi harus berupa angka!**")
+                            return
+
+                    await self.create_new_userbot(conv, phone, api_id, api_hash, duration, user_id)
+                    
+                except asyncio.TimeoutError:
+                    await conv.send_message("❌ **Waktu habis! Silahkan kirim `/start` untuk mencoba lagi.**")
+                except Exception as e:
+                    await conv.send_message(f"❌ **Error:** `{str(e)}`")
 
         @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]cek$'))
         async def check_userbot_handler(event):
@@ -430,21 +382,6 @@ Silahkan hubungi admin untuk membeli userbot!
             page = int(event.data.decode().split('_')[1])
             await self.show_userbot_list(event, page)
 
-        @self.bot.on(events.CallbackQuery(pattern=r'^toggle_(\d+)'))
-        async def toggle_userbot_callback(event):
-            if event.sender_id not in ADMIN_IDS:
-                return
-                
-            user_id = event.data.decode().split('_')[1]
-            data = load_data()
-            
-            if user_id in data['userbots']:
-                data['userbots'][user_id]['active'] = not data['userbots'][user_id]['active']
-                if save_data(data):
-                    await self.show_userbot_list(event, 0)
-                else:
-                    await event.answer("❌ Gagal mengubah status userbot!", alert=True)
-
         @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]hapus$'))
         async def delete_userbot_handler(event):
             user_id = event.sender_id
@@ -457,7 +394,6 @@ Silahkan hubungi admin untuk membeli userbot!
                     
                 await self.show_delete_list(event, page=0)
             else:
-                # For premium users, check their userbot
                 user_bot = None
                 for bot_id, info in data['userbots'].items():
                     if str(info.get('owner_id')) == str(user_id):
