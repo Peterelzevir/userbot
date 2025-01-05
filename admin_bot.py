@@ -11,6 +11,15 @@ import math
 import json
 import logging
 import re
+import subprocess
+
+# Set up logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    filename='bot.log'
+)
+logger = logging.getLogger(__name__)
 
 def load_data():
     """Load data from JSON file with error handling"""
@@ -132,6 +141,49 @@ Silahkan pilih kategori bantuan di bawah ini:
                 ]
             }
         }
+        # Start session checker
+        asyncio.create_task(self.check_sessions())
+
+    async def check_sessions(self):
+        """Periodic check for expired/invalid sessions"""
+        while True:
+            try:
+                data = load_data()
+                for user_id, info in data['userbots'].items():
+                    if info['active']:
+                        try:
+                            session = StringSession(info['session'])
+                            client = TelegramClient(session, API_ID, API_HASH)
+                            await client.connect()
+                            if not await client.is_user_authorized():
+                                # Session expired
+                                info['active'] = False
+                                # Notify admin
+                                admin_text = f"""
+⚠️ **Session Expired!**
+
+👤 **Detail Userbot:**
+• Nama: `{info['first_name']}`
+• ID: `{user_id}`
+• Owner: `{info['owner_id']}`
+                                """
+                                for admin_id in ADMIN_IDS:
+                                    try:
+                                        await self.bot.send_message(admin_id, admin_text)
+                                    except:
+                                        pass
+                        except Exception as e:
+                            logger.error(f"Session check error for {user_id}: {str(e)}")
+                            info['active'] = False
+                        finally:
+                            try:
+                                await client.disconnect()
+                            except:
+                                pass
+                save_data(data)
+            except Exception as e:
+                logger.error(f"Session check error: {str(e)}")
+            await asyncio.sleep(3600)  # Check every hour
 
     async def show_userbot_list(self, event, page=0):
         """Show list of userbots with pagination"""
@@ -268,6 +320,7 @@ Silahkan pilih userbot yang ingin dihapus:
             # Save userbot data
             data = load_data()
             expiry_date = (datetime.now() + timedelta(days=duration)).isoformat()
+            session_string = client.session.save()
             
             data['userbots'][str(me.id)] = {
                 'first_name': me.first_name,
@@ -276,7 +329,7 @@ Silahkan pilih userbot yang ingin dihapus:
                 'created_at': datetime.now().isoformat(),
                 'expires_at': expiry_date,
                 'active': True,
-                'session': client.session.save(),
+                'session': session_string,
                 'owner_id': owner_id
             }
             
@@ -293,13 +346,25 @@ Silahkan pilih userbot yang ingin dihapus:
 • Expires: `{datetime.fromisoformat(expiry_date).strftime('%Y-%m-%d %H:%M:%S')}`
 
 📝 **String Session:**
-`{client.session.save()}`
+`{session_string}`
 
 ✅ **Status: Aktif**
                 """
                 
                 # Send userbot details
                 await conv.send_message(success_text)
+                
+                # Try to start userbot
+                try:
+                    userbot_path = 'userbot.py'  # Path to your userbot.py
+                    if os.path.exists(userbot_path):
+                        cmd = f'python3 {userbot_path}'
+                        subprocess.Popen(cmd.split())
+                        await conv.send_message("✅ **Userbot started successfully!**")
+                    else:
+                        await conv.send_message("⚠️ **Warning: userbot.py not found!**")
+                except Exception as e:
+                    await conv.send_message(f"⚠️ **Failed to start userbot:** `{str(e)}`")
                 
                 # Send back to main menu
                 if owner_id in ADMIN_IDS:
@@ -356,6 +421,32 @@ Silahkan pilih userbot yang ingin dihapus:
             ]
             await event.reply(text, buttons=buttons)
 
+        @self.bot.on(events.CallbackQuery(data="back_to_start"))
+        async def back_to_start_handler(event):
+            """Handle back to start button"""
+            user_id = event.sender_id
+            try:
+                if user_id in ADMIN_IDS:
+                    buttons = [
+                        [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                        [Button.inline("👥 Add Premium", "add_premium")],
+                        [Button.inline("📢 Broadcast", "broadcast")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    ]
+                    text = "👋 **Halo admin!**\n\nSilahkan pilih menu:"
+                else:
+                    if is_premium(user_id):
+                        text = "👋 **Halo pengguna premium!**\n\nSilahkan pilih menu:"
+                    else:
+                        text = "👋 **Halo!**\n\nSilahkan pilih menu:"
+                    buttons = [
+                        [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    ]
+                await event.edit(text, buttons=buttons)
+            except Exception as e:
+                logger.error(f"Back to start error: {str(e)}")
+
         @self.bot.on(events.CallbackQuery(pattern=r'^help_(\w+)'))
         async def help_callback(event):
             page = event.data.decode().split('_')[1]
@@ -366,7 +457,7 @@ Silahkan pilih userbot yang ingin dihapus:
             help_page = self.help_pages.get(page, self.help_pages['main'])
             await event.edit(help_page['text'], buttons=help_page['buttons'])
 
-        @self.bot.on(events.CallbackQuery(pattern="broadcast"))
+        @self.bot.on(events.CallbackQuery(pattern=r'^broadcast$'))
         async def broadcast_button_handler(event):
             if event.sender_id not in ADMIN_IDS:
                 await event.answer("⚠️ Hanya untuk admin!", alert=True)
@@ -406,10 +497,20 @@ Silahkan pilih userbot yang ingin dihapus:
 • Gagal: `{failed}`
 • Total: `{success + failed}`
                     """)
+
+                    # Send back to main menu
+                    buttons = [
+                        [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                        [Button.inline("👥 Add Premium", "add_premium")],
+                        [Button.inline("📢 Broadcast", "broadcast")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    ]
+                    await conv.send_message("👋 **Kembali ke menu admin.**", buttons=buttons)
+
                 except asyncio.TimeoutError:
                     await conv.send_message("❌ **Waktu habis! Silahkan klik tombol broadcast untuk mencoba lagi.**")
 
-        @self.bot.on(events.CallbackQuery(pattern="add_premium"))
+        @self.bot.on(events.CallbackQuery(pattern=r'^add_premium$'))
         async def premium_button_handler(event):
             if event.sender_id not in ADMIN_IDS:
                 await event.answer("⚠️ Hanya untuk admin!", alert=True)
@@ -475,7 +576,7 @@ Silahkan pilih userbot yang ingin dihapus:
                     
                 except asyncio.TimeoutError:
                     await conv.send_message("❌ **Waktu habis! Silahkan klik tombol Add Premium untuk mencoba lagi.**")
-        
+
         @self.bot.on(events.CallbackQuery(pattern=r'^create_userbot$'))
         async def create_userbot_handler(event):
             user_id = event.sender_id
@@ -552,17 +653,65 @@ Silahkan pilih userbot yang ingin dihapus:
         @self.bot.on(events.CallbackQuery(pattern=r'^toggle_(\d+)'))
         async def toggle_userbot_callback(event):
             if event.sender_id not in ADMIN_IDS:
+                await event.answer("⚠️ Hanya untuk admin!", alert=True)
                 return
                 
             user_id = event.data.decode().split('_')[1]
             data = load_data()
             
             if user_id in data['userbots']:
-                data['userbots'][user_id]['active'] = not data['userbots'][user_id]['active']
-                if save_data(data):
-                    await self.show_userbot_list(event, 0)
-                else:
-                    await event.answer("❌ Gagal mengubah status userbot!", alert=True)
+                try:
+                    # Get session and try to connect
+                    session = StringSession(data['userbots'][user_id]['session'])
+                    client = TelegramClient(session, API_ID, API_HASH)
+                    
+                    if data['userbots'][user_id]['active']:
+                        # Deactivate
+                        try:
+                            await client.connect()
+                            await client.log_out()
+                            data['userbots'][user_id]['active'] = False
+                            await event.answer("✅ Userbot dinonaktifkan!", alert=True)
+                        except:
+                            pass
+                    else:
+                        # Activate
+                        try:
+                            await client.connect()
+                            if await client.is_user_authorized():
+                                data['userbots'][user_id]['active'] = True
+                                # Try to start userbot
+                                try:
+                                    userbot_path = 'userbot.py'
+                                    if os.path.exists(userbot_path):
+                                        cmd = f'python3 {userbot_path}'
+                                        subprocess.Popen(cmd.split())
+                                        await event.answer("✅ Userbot diaktifkan!", alert=True)
+                                    else:
+                                        await event.answer("⚠️ Warning: userbot.py not found!", alert=True)
+                                except Exception as e:
+                                    logger.error(f"Failed to start userbot: {str(e)}")
+                                    await event.answer("⚠️ Failed to start userbot!", alert=True)
+                            else:
+                                await event.answer("❌ Session expired!", alert=True)
+                                data['userbots'][user_id]['active'] = False
+                        except Exception as e:
+                            logger.error(f"Failed to activate: {str(e)}")
+                            await event.answer("❌ Failed to activate userbot!", alert=True)
+                            data['userbots'][user_id]['active'] = False
+
+                    if save_data(data):
+                        await self.show_userbot_list(event, 0)
+                    else:
+                        await event.answer("❌ Gagal menyimpan perubahan!", alert=True)
+                except Exception as e:
+                    logger.error(f"Toggle error: {str(e)}")
+                    await event.answer("❌ Error saat mengubah status!", alert=True)
+                finally:
+                    try:
+                        await client.disconnect()
+                    except:
+                        pass
 
         @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]hapus$'))
         async def delete_userbot_handler(event):
@@ -659,6 +808,21 @@ Silahkan pilih userbot yang ingin dihapus:
                         return
                 
                 try:
+                    if info['active']:
+                        # Try to logout first
+                        try:
+                            session = StringSession(info['session'])
+                            client = TelegramClient(session, API_ID, API_HASH)
+                            await client.connect()
+                            await client.log_out()
+                        except:
+                            pass
+                        finally:
+                            try:
+                                await client.disconnect()
+                            except:
+                                pass
+                    
                     # Clean up session
                     session = StringSession(info['session'])
                     if os.path.exists(f"{session}.session"):
@@ -677,24 +841,10 @@ Silahkan pilih userbot yang ingin dihapus:
             else:
                 await event.edit("❌ **Userbot tidak ditemukan!**")
 
-        @self.bot.on(events.CallbackQuery(data="back_to_start"))
-        async def back_to_start_handler(event):
-            """Handle back to start button"""
+        @self.bot.on(events.CallbackQuery(data="help_close"))
+        async def help_close_handler(event):
+            """Handle help close button"""
             await event.delete()
-            # Simulate /start command
-            message = event.original_update.msg_id
-            await start_handler(await event.get_message())
-
-        @self.bot.on(events.CallbackQuery(data="not_premium"))
-        async def not_premium_handler(event):
-            text = """
-⚠️ **Akses Ditolak**
-
-Anda tidak memiliki akses premium.
-Silahkan hubungi admin untuk membeli userbot!
-            """
-            buttons = [[Button.inline("◀️ Kembali", "back_to_start")]]
-            await event.edit(text, buttons=buttons)
 
         # Start the bot
         await self.bot.start(bot_token=BOT_TOKEN)
