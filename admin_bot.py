@@ -1,3 +1,4 @@
+# admin_bot.py
 from telethon import TelegramClient, events, Button, types
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.sessions import StringSession
@@ -132,6 +133,200 @@ Silahkan pilih kategori bantuan di bawah ini:
             }
         }
 
+    async def show_userbot_list(self, event, page=0):
+        """Show list of userbots with pagination"""
+        data = load_data()
+        if not data['userbots']:
+            await event.reply("❌ **Tidak ada userbot yang ditemukan!**")
+            return
+
+        userbots = list(data['userbots'].items())
+        total_pages = math.ceil(len(userbots) / self.page_size)
+        start_idx = page * self.page_size
+        end_idx = start_idx + self.page_size
+        current_page_userbots = userbots[start_idx:end_idx]
+
+        buttons = []
+        for user_id, info in current_page_userbots:
+            status = "🟢" if info['active'] else "🔴"
+            button_text = f"{status} {info['first_name']} ({user_id})"
+            buttons.append([Button.inline(button_text, f"toggle_{user_id}")])
+
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(Button.inline("⬅️ Kembali", f"page_{page-1}"))
+        if page < total_pages - 1:
+            nav_buttons.append(Button.inline("Lanjut ➡️", f"page_{page+1}"))
+        if nav_buttons:
+            buttons.append(nav_buttons)
+
+        buttons.append([Button.inline("❓ Bantuan", "help_main")])
+
+        active_count = sum(1 for _, info in data['userbots'].items() if info['active'])
+        inactive_count = len(data['userbots']) - active_count
+        
+        text = f"""
+📊 **Statistik Userbot:**
+• Total: `{len(data['userbots'])}`
+• Aktif: `{active_count}`
+• Nonaktif: `{inactive_count}`
+
+🔄 **Silahkan pilih userbot untuk mengubah status:**
+        """
+        
+        if event.message:
+            await event.reply(text, buttons=buttons)
+        else:
+            await event.edit(text, buttons=buttons)
+
+    async def show_delete_list(self, event, page=0):
+        """Show list of userbots for deletion"""
+        data = load_data()
+        
+        text = """
+❌ **Hapus Userbot**
+
+Silahkan pilih userbot yang ingin dihapus:
+        """
+        
+        userbots = list(data['userbots'].items())
+        total_pages = math.ceil(len(userbots) / self.page_size)
+        start_idx = page * self.page_size
+        end_idx = start_idx + self.page_size
+        current_page_userbots = userbots[start_idx:end_idx]
+
+        buttons = []
+        for user_id, info in current_page_userbots:
+            status = "🟢" if info['active'] else "🔴"
+            button_text = f"{status} {info['first_name']} ({user_id})"
+            buttons.append([Button.inline(button_text, f"delete_{user_id}")])
+
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(Button.inline("⬅️ Kembali", f"delete_page_{page-1}"))
+        if page < total_pages - 1:
+            nav_buttons.append(Button.inline("Lanjut ➡️", f"delete_page_{page+1}"))
+        if nav_buttons:
+            buttons.append(nav_buttons)
+
+        buttons.append([Button.inline("❌ Tutup", "help_close")])
+
+        if event.message:
+            await event.reply(text, buttons=buttons)
+        else:
+            await event.edit(text, buttons=buttons)
+
+    async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
+        """Create new userbot session"""
+        try:
+            # Validate inputs
+            try:
+                api_id = int(api_id)
+            except ValueError:
+                await conv.send_message("❌ **Error: API ID harus berupa angka!**")
+                return
+
+            # Create client and connect
+            client = TelegramClient(StringSession(), api_id, api_hash, device_model=APP_VERSION)
+            await client.connect()
+            
+            await conv.send_message("⏳ **Memproses permintaan login...**")
+            
+            try:
+                code = await client.send_code_request(phone)
+            except Exception as e:
+                await conv.send_message(f"❌ **Error saat mengirim kode:** `{str(e)}`")
+                return
+            
+            await conv.send_message("📲 **Masukkan kode OTP (format: 1 2 3 4 5):**")
+            try:
+                otp_msg = await conv.get_response(timeout=300)
+                otp = ''.join(otp_msg.text.split())
+            except asyncio.TimeoutError:
+                await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
+                return
+
+            try:
+                await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
+            except PhoneCodeInvalidError:
+                await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
+                return
+            except SessionPasswordNeededError:
+                await conv.send_message("🔐 **Akun ini menggunakan verifikasi 2 langkah. Silahkan masukkan password:**")
+                try:
+                    password = await conv.get_response(timeout=300)
+                    await client.sign_in(password=password.text)
+                except asyncio.TimeoutError:
+                    await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
+                    return
+                except Exception as e:
+                    await conv.send_message(f"❌ **Error saat login:** `{str(e)}`")
+                    return
+
+            me = await client.get_me()
+            
+            # Save userbot data
+            data = load_data()
+            expiry_date = (datetime.now() + timedelta(days=duration)).isoformat()
+            
+            data['userbots'][str(me.id)] = {
+                'first_name': me.first_name,
+                'last_name': me.last_name,
+                'phone': phone,
+                'created_at': datetime.now().isoformat(),
+                'expires_at': expiry_date,
+                'active': True,
+                'session': client.session.save(),
+                'owner_id': owner_id
+            }
+            
+            if save_data(data):
+                success_text = f"""
+🤖 **Userbot berhasil dibuat!**
+
+👤 **Detail Userbot:**
+• First Name: `{me.first_name}`
+• Last Name: `{me.last_name or 'N/A'}`
+• User ID: `{me.id}`
+• Phone: `{phone}`
+• Created: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`
+• Expires: `{datetime.fromisoformat(expiry_date).strftime('%Y-%m-%d %H:%M:%S')}`
+
+📝 **String Session:**
+`{client.session.save()}`
+
+✅ **Status: Aktif**
+                """
+                
+                # Send userbot details
+                await conv.send_message(success_text)
+                
+                # Send back to main menu
+                if owner_id in ADMIN_IDS:
+                    buttons = [
+                        [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                        [Button.inline("👥 Add Premium", "add_premium")],
+                        [Button.inline("📢 Broadcast", "broadcast")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    ]
+                else:
+                    buttons = [
+                        [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    ]
+                await conv.send_message("👋 **Kembali ke menu utama.**", buttons=buttons)
+            else:
+                await conv.send_message("❌ **Error saat menyimpan data userbot!**")
+            
+        except Exception as e:
+            await conv.send_message(f"❌ **Error tidak terduga:** `{str(e)}`")
+            logger.error(f"Error creating userbot: {str(e)}")
+        finally:
+            try:
+                await client.disconnect()
+            except:
+                pass
+
     async def start(self):
         """Start the bot and register all handlers"""
         
@@ -161,57 +356,25 @@ Silahkan pilih kategori bantuan di bawah ini:
             ]
             await event.reply(text, buttons=buttons)
 
-        @self.bot.on(events.CallbackQuery(data="not_premium"))
-        async def not_premium_handler(event):
-            text = """
-⚠️ **Akses Ditolak**
+        @self.bot.on(events.CallbackQuery(pattern=r'^help_(\w+)'))
+        async def help_callback(event):
+            page = event.data.decode().split('_')[1]
+            if page == 'close':
+                await event.delete()
+                return
 
-Anda tidak memiliki akses premium.
-Silahkan hubungi admin untuk membeli userbot!
-            """
-            buttons = [[Button.inline("◀️ Kembali", "back_to_start")]]
-            await event.edit(text, buttons=buttons)
+            help_page = self.help_pages.get(page, self.help_pages['main'])
+            await event.edit(help_page['text'], buttons=help_page['buttons'])
 
-        @self.bot.on(events.CallbackQuery(pattern=r'^broadcast$'))
+        @self.bot.on(events.CallbackQuery(pattern="broadcast"))
         async def broadcast_button_handler(event):
             if event.sender_id not in ADMIN_IDS:
                 await event.answer("⚠️ Hanya untuk admin!", alert=True)
                 return
 
-            await event.delete()
-            msg = events.NewMessage.Event(
-                message=types.Message(
-                    id=0, peer_id=types.PeerUser(event.sender_id),
-                    message="/broadcast"
-                )
-            )
-            msg.pattern_match = re.match(r'(?i)[!/\.]broadcast$', "/broadcast")
-            await broadcast_handler(msg)
-
-        @self.bot.on(events.CallbackQuery(pattern=r'^add_premium$'))
-        async def premium_button_handler(event):
-            if event.sender_id not in ADMIN_IDS:
-                await event.answer("⚠️ Hanya untuk admin!", alert=True)
-                return
-
-            await event.delete()
-            msg = events.NewMessage.Event(
-                message=types.Message(
-                    id=0, peer_id=types.PeerUser(event.sender_id),
-                    message="/addpremium"
-                )
-            )
-            msg.pattern_match = re.match(r'(?i)[!/\.]addpremium$', "/addpremium")
-            await add_premium_handler(msg)
-
-        @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]broadcast$'))
-        async def broadcast_handler(event):
-            if event.sender_id not in ADMIN_IDS:
-                await event.reply("⚠️ **Maaf, perintah ini hanya untuk admin!**")
-                return
-            
             async with self.bot.conversation(event.chat_id) as conv:
                 try:
+                    await event.delete()
                     await conv.send_message("📝 **Masukkan pesan broadcast:**")
                     msg = await conv.get_response(timeout=300)
                     
@@ -244,16 +407,17 @@ Silahkan hubungi admin untuk membeli userbot!
 • Total: `{success + failed}`
                     """)
                 except asyncio.TimeoutError:
-                    await conv.send_message("❌ **Waktu habis! Silahkan kirim `/broadcast` untuk mencoba lagi.**")
+                    await conv.send_message("❌ **Waktu habis! Silahkan klik tombol broadcast untuk mencoba lagi.**")
 
-        @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]addpremium$'))
-        async def add_premium_handler(event):
+        @self.bot.on(events.CallbackQuery(pattern="add_premium"))
+        async def premium_button_handler(event):
             if event.sender_id not in ADMIN_IDS:
-                await event.reply("⚠️ **Maaf, perintah ini hanya untuk admin!**")
+                await event.answer("⚠️ Hanya untuk admin!", alert=True)
                 return
-            
+
             async with self.bot.conversation(event.chat_id) as conv:
                 try:
+                    await event.delete()
                     await conv.send_message("📝 **Masukkan ID user yang akan ditambahkan sebagai premium:**")
                     user_id_msg = await conv.get_response(timeout=300)
                     user_id = user_id_msg.text.strip()
@@ -294,14 +458,24 @@ Silahkan hubungi admin untuk membeli userbot!
                             """
                             await self.bot.send_message(user_id, text)
                             await conv.send_message(f"✅ **Berhasil menambahkan user `{user_id}` sebagai premium!**")
+                            
+                            # Send back to main menu
+                            buttons = [
+                                [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                                [Button.inline("👥 Add Premium", "add_premium")],
+                                [Button.inline("📢 Broadcast", "broadcast")],
+                                [Button.inline("❓ Bantuan", "help_main")]
+                            ]
+                            await conv.send_message("👋 **Kembali ke menu admin.**", buttons=buttons)
+                            
                         except Exception as e:
                             await conv.send_message(f"⚠️ **Berhasil menambahkan premium, tapi gagal mengirim notifikasi ke user:** `{str(e)}`")
                     else:
                         await conv.send_message("❌ **Gagal menyimpan data premium user!**")
                     
                 except asyncio.TimeoutError:
-                    await conv.send_message("❌ **Waktu habis! Silahkan kirim `/addpremium` untuk mencoba lagi.**")
-
+                    await conv.send_message("❌ **Waktu habis! Silahkan klik tombol Add Premium untuk mencoba lagi.**")
+        
         @self.bot.on(events.CallbackQuery(pattern=r'^create_userbot$'))
         async def create_userbot_handler(event):
             user_id = event.sender_id
@@ -375,6 +549,21 @@ Silahkan hubungi admin untuk membeli userbot!
             page = int(event.data.decode().split('_')[1])
             await self.show_userbot_list(event, page)
 
+        @self.bot.on(events.CallbackQuery(pattern=r'^toggle_(\d+)'))
+        async def toggle_userbot_callback(event):
+            if event.sender_id not in ADMIN_IDS:
+                return
+                
+            user_id = event.data.decode().split('_')[1]
+            data = load_data()
+            
+            if user_id in data['userbots']:
+                data['userbots'][user_id]['active'] = not data['userbots'][user_id]['active']
+                if save_data(data):
+                    await self.show_userbot_list(event, 0)
+                else:
+                    await event.answer("❌ Gagal mengubah status userbot!", alert=True)
+
         @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]hapus$'))
         async def delete_userbot_handler(event):
             user_id = event.sender_id
@@ -387,6 +576,7 @@ Silahkan hubungi admin untuk membeli userbot!
                     
                 await self.show_delete_list(event, page=0)
             else:
+                # For premium users, check their userbot
                 user_bot = None
                 for bot_id, info in data['userbots'].items():
                     if str(info.get('owner_id')) == str(user_id):
@@ -416,43 +606,6 @@ Silahkan hubungi admin untuk membeli userbot!
                     ]
                 ]
                 await event.reply(text, buttons=buttons)
-
-        async def show_delete_list(self, event, page=0):
-            """Show list of userbots for deletion"""
-            data = load_data()
-            
-            text = """
-❌ **Hapus Userbot**
-
-Silahkan pilih userbot yang ingin dihapus:
-            """
-            
-            userbots = list(data['userbots'].items())
-            total_pages = math.ceil(len(userbots) / self.page_size)
-            start_idx = page * self.page_size
-            end_idx = start_idx + self.page_size
-            current_page_userbots = userbots[start_idx:end_idx]
-
-            buttons = []
-            for user_id, info in current_page_userbots:
-                status = "🟢" if info['active'] else "🔴"
-                button_text = f"{status} {info['first_name']} ({user_id})"
-                buttons.append([Button.inline(button_text, f"delete_{user_id}")])
-
-            nav_buttons = []
-            if page > 0:
-                nav_buttons.append(Button.inline("⬅️ Kembali", f"delete_page_{page-1}"))
-            if page < total_pages - 1:
-                nav_buttons.append(Button.inline("Lanjut ➡️", f"delete_page_{page+1}"))
-            if nav_buttons:
-                buttons.append(nav_buttons)
-
-            buttons.append([Button.inline("❌ Tutup", "help_close")])
-
-            if event.message:
-                await event.reply(text, buttons=buttons)
-            else:
-                await event.edit(text, buttons=buttons)
 
         @self.bot.on(events.CallbackQuery(pattern=r'^delete_(\d+)'))
         async def delete_confirmation_callback(event):
@@ -531,6 +684,17 @@ Silahkan pilih userbot yang ingin dihapus:
             # Simulate /start command
             message = event.original_update.msg_id
             await start_handler(await event.get_message())
+
+        @self.bot.on(events.CallbackQuery(data="not_premium"))
+        async def not_premium_handler(event):
+            text = """
+⚠️ **Akses Ditolak**
+
+Anda tidak memiliki akses premium.
+Silahkan hubungi admin untuk membeli userbot!
+            """
+            buttons = [[Button.inline("◀️ Kembali", "back_to_start")]]
+            await event.edit(text, buttons=buttons)
 
         # Start the bot
         await self.bot.start(bot_token=BOT_TOKEN)
