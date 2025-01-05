@@ -1,4 +1,5 @@
 # admin_bot.py
+
 from telethon import TelegramClient, events, Button, types
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.sessions import StringSession
@@ -144,7 +145,7 @@ Silahkan pilih kategori bantuan di bawah ini:
         # Start session checker
         asyncio.create_task(self.check_sessions())
 
-    async def check_sessions(self):
+     async def check_sessions(self):
         """Periodic check for expired/invalid sessions"""
         while True:
             try:
@@ -169,7 +170,7 @@ Silahkan pilih kategori bantuan di bawah ini:
                                 """
                                 for admin_id in ADMIN_IDS:
                                     try:
-                                        await self.bot.send_message(admin_id, admin_text)
+                                        await self.bot.send_message(admin_id, admin_text, parse_mode='md')
                                     except:
                                         pass
                         except Exception as e:
@@ -185,7 +186,7 @@ Silahkan pilih kategori bantuan di bawah ini:
                 logger.error(f"Session check error: {str(e)}")
             await asyncio.sleep(3600)  # Check every hour
 
-    async def show_userbot_list(self, event, page=0):
+     async def show_userbot_list(self, event, page=0):
         """Show list of userbots with pagination"""
         data = load_data()
         if not data['userbots']:
@@ -356,15 +357,13 @@ Silahkan pilih userbot yang ingin dihapus:
                 
                 # Try to start userbot
                 try:
-                    userbot_path = 'userbot.py'  # Path to your userbot.py
-                    if os.path.exists(userbot_path):
-                        cmd = f'python3 {userbot_path}'
-                        subprocess.Popen(cmd.split())
-                        await conv.send_message("✅ **Userbot started successfully!**")
-                    else:
-                        await conv.send_message("⚠️ **Warning: userbot.py not found!**")
+                    # Import here to avoid circular import
+                    from userbot import Userbot
+                    userbot = Userbot(session_string, api_id, api_hash)
+                    await userbot.start()
+                    await conv.send_message("✅ **Userbot started successfully with all features!**")
                 except Exception as e:
-                    await conv.send_message(f"⚠️ **Failed to start userbot:** `{str(e)}`")
+                    await conv.send_message(f"⚠️ **Warning: Userbot created but failed to start:** `{str(e)}`")
                 
                 # Send back to main menu
                 if owner_id in ADMIN_IDS:
@@ -392,11 +391,16 @@ Silahkan pilih userbot yang ingin dihapus:
             except:
                 pass
 
-    async def start(self):
+     async def start(self):
         """Start the bot and register all handlers"""
         
         @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]start$'))
         async def start_handler(event):
+            # Prevent double response
+            if hasattr(event, '_handled'):
+                return
+            event._handled = True
+            
             user_id = event.sender_id
             save_user(user_id, event.sender.username)
             
@@ -682,13 +686,10 @@ Silahkan pilih userbot yang ingin dihapus:
                                 data['userbots'][user_id]['active'] = True
                                 # Try to start userbot
                                 try:
-                                    userbot_path = 'userbot.py'
-                                    if os.path.exists(userbot_path):
-                                        cmd = f'python3 {userbot_path}'
-                                        subprocess.Popen(cmd.split())
-                                        await event.answer("✅ Userbot diaktifkan!", alert=True)
-                                    else:
-                                        await event.answer("⚠️ Warning: userbot.py not found!", alert=True)
+                                    from userbot import Userbot
+                                    userbot = Userbot(data['userbots'][user_id]['session'], API_ID, API_HASH)
+                                    await userbot.start()
+                                    await event.answer("✅ Userbot diaktifkan!", alert=True)
                                 except Exception as e:
                                     logger.error(f"Failed to start userbot: {str(e)}")
                                     await event.answer("⚠️ Failed to start userbot!", alert=True)
@@ -841,9 +842,19 @@ Silahkan pilih userbot yang ingin dihapus:
             else:
                 await event.edit("❌ **Userbot tidak ditemukan!**")
 
+        @self.bot.on(events.CallbackQuery(data="not_premium"))
+        async def not_premium_handler(event):
+            text = """
+⚠️ **Akses Ditolak**
+
+Anda tidak memiliki akses premium.
+Silahkan hubungi admin untuk membeli userbot!
+            """
+            buttons = [[Button.inline("◀️ Kembali", "back_to_start")]]
+            await event.edit(text, buttons=buttons)
+
         @self.bot.on(events.CallbackQuery(data="help_close"))
         async def help_close_handler(event):
-            """Handle help close button"""
             await event.delete()
 
         # Start the bot
