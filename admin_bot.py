@@ -232,7 +232,7 @@ Silahkan pilih kategori bantuan di bawah ini:
         else:
             await event.edit(text, buttons=buttons)
 
-    async def show_delete_list(self, event, page=0):
+     async def show_delete_list(self, event, page=0):
         """Show list of userbots for deletion"""
         data = load_data()
         
@@ -269,7 +269,7 @@ Silahkan pilih userbot yang ingin dihapus:
         else:
             await event.edit(text, buttons=buttons)
 
-    async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
+     async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
         """Create new userbot session"""
         try:
             # Validate inputs
