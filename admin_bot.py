@@ -1,7 +1,7 @@
 # admin_bot.py
 
 from telethon import TelegramClient, events, Button, types
-from telethon.tl.functions.users import GetFullUserRequest
+from telethon.tl.functions.users import GetFullUser Request
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError
 from config import API_ID, API_HASH, BOT_TOKEN, ADMIN_IDS, APP_VERSION
@@ -150,7 +150,7 @@ async def verify_session(session_str, api_id, api_hash):
         return True
         
     except Exception as e:
-        logger.error(f"Session verification error: {str(e)}")
+                logger.error(f"Session verification error: {str(e)}")
         return False
     finally:
         if client:
@@ -281,7 +281,7 @@ Format: 1 2 3 4 5 (pisahkan dengan spasi)
                 return
 
             try:
-                await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
+                                await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
             except PhoneCodeInvalidError:
                 await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
                 return
@@ -344,7 +344,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
                 self.userbot_manager.running_bots[str(me.id)] = result
                 
                 success_text = f"""
-🤖 **Userbot berhasil dibuat dan dijalankan!**
+🤖 **User bot berhasil dibuat dan dijalankan!**
 
 👤 **Detail Userbot:**
 • First Name: `{me.first_name}`
@@ -404,7 +404,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
         finally:
             if client:
                 try:
-                    await client.disconnect()
+                                        await client.disconnect()
                 except Exception as e:
                     logger.error(f"Error disconnecting client: {str(e)}")
 
@@ -514,7 +514,7 @@ Silahkan pilih userbot yang ingin dihapus:
 
         buttons.append([Button.inline("❌ Tutup", "help_close")])
 
-        if event.message:
+                if event.message:
             await event.reply(text, buttons=buttons)
         else:
             await event.edit(text, buttons=buttons)
@@ -604,8 +604,8 @@ Silahkan pilih menu yang tersedia:
 
             await event.reply(text, buttons=buttons)
             
-            @self.bot.on(events.CallbackQuery(pattern=r'^help_(\w+)'))
-    async def help_callback(event):
+        @self.bot.on(events.CallbackQuery(pattern=r'^help_(\w+)'))
+        async def help_callback(event):
             page = event.data.decode().split('_')[1]
             if page == 'close':
                 await event.delete()
@@ -653,7 +653,7 @@ Note:
                             continue
                         
                         if i % 5 == 0:  # Update progress every 5 users
-                            await progress_msg.edit(f"📤 **Mengirim broadcast... ({i}/{total_users})**")
+                                                        await progress_msg.edit(f"📤 **Mengirim broadcast... ({i}/{total_users})**")
                         await asyncio.sleep(0.5)  # Delay to prevent flood
 
                     await progress_msg.edit(f"""
@@ -742,7 +742,7 @@ Silahkan klik tombol broadcast untuk mencoba lagi.
                 await event.answer("⚠️ Hanya untuk admin!", alert=True)
                 return
 
-     async with self.bot.conversation(event.chat_id) as conv:
+            async with self.bot.conversation(event.chat_id) as conv:
                 try:
                     await event.delete()
                     await conv.send_message("""
@@ -770,10 +770,10 @@ Note:
                     
                     # Check if already premium
                     if is_premium(user_id):
-                        await conv.send_message("⚠️ **User sudah memiliki akses premium!**")
+                        await conv.send_message("⚠️ **User  sudah memiliki akses premium!**")
                         return
                     
-                    await conv.send_message("""
+                                        await conv.send_message("""
 ⏳ **Masukkan durasi premium dalam hari**
 
 Contoh durasi:
@@ -798,7 +798,7 @@ Contoh durasi:
                     try:
                         user = await self.bot.get_entity(user_id)
                         if not user:
-                            raise ValueError("User tidak ditemukan")
+                            raise ValueError("User  tidak ditemukan")
                     except Exception as e:
                         await conv.send_message("❌ **Error: User tidak ditemukan di Telegram!**")
                         return
@@ -881,7 +881,7 @@ Mohon informasikan manual ke user.
                     logger.error(f"Error adding premium user: {str(e)}")
                     await conv.send_message(f"❌ **Error tidak terduga:** `{str(e)}`")
                     
-                    @self.bot.on(events.CallbackQuery(pattern="not_premium"))
+        @self.bot.on(events.CallbackQuery(pattern="not_premium"))
         async def not_premium_handler(event):
             text = """
 ⚠️ **Akses Premium Diperlukan!**
@@ -890,16 +890,16 @@ Untuk membuat userbot, Anda memerlukan akses premium.
 
 📦 **Keuntungan Premium:**
 • Buat userbot pribadi
-• Durasi aktif 30 hari
+• Durasi aktif sesuai paket
 • Fitur autoforward
 • Support prioritas
 • Update otomatis
 • Garansi kepuasan
 
 💎 **Harga Paket Premium:**
-• 1 Bulan: Rp XX.XXX
-• 3 Bulan: Rp XX.XXX 
-• 6 Bulan: Rp XX.XXX
+• 1 Bulan: Rp 10.000
+• 3 Bulan: Rp 30.000
+• 6 Bulan: Rp 60.000
 • 1 Tahun: Rp XX.XXX
 
 🎁 **Bonus Premium:**
@@ -1023,7 +1023,7 @@ Kirim /cancel untuk membatalkan
 
                     # Set duration based on user type
                     duration = 30 if user_id not in ADMIN_IDS else None
-                    if duration is None:
+                                        if duration is None:
                         await conv.send_message("""
 ⏳ **Masukkan durasi aktif userbot (dalam hari)**
 
@@ -1145,7 +1145,7 @@ Silahkan hubungi admin untuk bantuan.
                                 
                                 # Stop process if running
                                 if user_id in self.userbot_manager.running_bots:
-                                    process = self.userbot_manager.running_bots[user_id]
+                                                                        process = self.userbot_manager.running_bots[user_id]
                                     self.userbot_manager.stop_userbot(process)
                                     del self.userbot_manager.running_bots[user_id]
                                 
@@ -1155,7 +1155,7 @@ Silahkan hubungi admin untuk bantuan.
                                     text = f"""
 ⚠️ **Pemberitahuan Userbot**
 
-🤖 **Userbot Anda telah kadaluarsa!**
+🤖 **User bot Anda telah kadaluarsa!**
 
 Detail Userbot:
 • Nama: `{info['first_name']}`
@@ -1181,3 +1181,11 @@ Silahkan hubungi admin untuk perpanjang durasi.
                     logger.error(f"Error in cleanup: {str(e)}")
                     
                 await asyncio.sleep(3600)  # Check every hour
+
+        # Start the cleanup task
+        asyncio.create_task(cleanup_expired())
+
+        # Start the bot
+        await self.bot.start(bot_token=BOT_TOKEN)
+        logger.info("Admin bot started.")
+        await self.bot.run_until_disconnected()
