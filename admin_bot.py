@@ -605,7 +605,7 @@ Silahkan pilih menu yang tersedia:
             await event.reply(text, buttons=buttons)
             
             @self.bot.on(events.CallbackQuery(pattern=r'^help_(\w+)'))
-        async def help_callback(event):
+    async def help_callback(event):
             page = event.data.decode().split('_')[1]
             if page == 'close':
                 await event.delete()
