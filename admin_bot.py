@@ -390,7 +390,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
                         [Button.inline("👥 Add Premium", "add_premium")],
                         [Button.inline("📢 Broadcast", "broadcast")],
                         [Button.inline("❓ Bantuan", "help_main")]
-                    [
+                    ]
                 else:
                     buttons = [
                         [Button.inline("🤖 Cek Status", "check_status")],
