@@ -1,7 +1,7 @@
 # admin_bot.py
 
 from telethon import TelegramClient, events, Button, types
-from telethon.tl.functions.users import GetFullUser Request
+from telethon.tl.functions.users import GetFullUser Request  # Corrected line
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError
 from config import API_ID, API_HASH, BOT_TOKEN, ADMIN_IDS, APP_VERSION
