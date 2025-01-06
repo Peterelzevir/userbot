@@ -1,7 +1,7 @@
 # admin_bot.py
 
 from telethon import TelegramClient, events, Button, types
-from telethon.tl.functions.users import GetFullUser
+from telethon.tl.functions.users import GetFullUser 
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError
 from config import API_ID, API_HASH, BOT_TOKEN, ADMIN_IDS, APP_VERSION
@@ -149,7 +149,7 @@ async def verify_session(session_str, api_id, api_hash):
             
         return True
         
-    except Exception as e:
+        except Exception as e:
         logger.error(f"Session verification error: {str(e)}")
         return False
     finally:
@@ -158,7 +158,7 @@ async def verify_session(session_str, api_id, api_hash):
                 await client.disconnect()
             except:
                 pass
-                
+
 class AdminBot:
     def __init__(self):
         self.bot = TelegramClient('admin_bot', API_ID, API_HASH)
@@ -281,7 +281,7 @@ Format: 1 2 3 4 5 (pisahkan dengan spasi)
                 return
 
             try:
-                                await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
+                await client.sign_in(phone=phone, code=otp, phone_                code_phone_hash=code.phone_code_hash)
             except PhoneCodeInvalidError:
                 await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
                 return
@@ -344,7 +344,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
                 self.userbot_manager.running_bots[str(me.id)] = result
                 
                 success_text = f"""
-🤖 **User bot berhasil dibuat dan dijalankan!**
+🤖 **User  bot berhasil dibuat dan dijalankan!**
 
 👤 **Detail Userbot:**
 • First Name: `{me.first_name}`
@@ -404,7 +404,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
         finally:
             if client:
                 try:
-                                        await client.disconnect()
+                    await client.disconnect()
                 except Exception as e:
                     logger.error(f"Error disconnecting client: {str(e)}")
 
@@ -473,56 +473,56 @@ Klik status untuk mengubah aktif/nonaktif
             await event.edit(text, buttons=buttons)
 
     async def show_delete_list(self, event, page=0):
-    """Show list of userbots for deletion"""
-    data = load_data()
-    
-    if not data['userbots']:
-        await event.reply("❌ **Tidak ada userbot yang ditemukan!**")
-        return
+        """Show list of userbots for deletion"""
+        data = load_data()
         
-    text = """
+        if not data['userbots']:
+            await event.reply("❌ **Tidak ada userbot yang ditemukan!**")
+            return
+            
+        text = """
 ❌ **Hapus Userbot**
 
 Silahkan pilih userbot yang ingin dihapus:
 • Klik pada userbot untuk konfirmasi
 • Proses tidak dapat dibatalkan
-    """
-    
-    userbots = list(data['userbots'].items())
-    total_pages = math.ceil(len(userbots) / self.page_size)
-    start_idx = page * self.page_size
-    end_idx = start_idx + self.page_size
-    current_page_userbots = userbots[start_idx:end_idx]
+        """
+        
+        userbots = list(data['userbots'].items())
+        total_pages = math.ceil(len(userbots) / self.page_size)
+        start_idx = page * self.page_size
+        end_idx = start_idx + self.page_size
+        current_page_userbots = userbots[start_idx:end_idx]
 
-    buttons = []
-    for user_id, info in current_page_userbots:
-        status = "🟢" if info['active'] else "🔴"
-        expires = datetime.fromisoformat(info['expires_at'])
-        days_left = (expires - datetime.now()).days
-        is_running = user_id in self.userbot_manager.running_bots
-        status_text = f"{status} {'⚡️' if is_running else ''}"
-        button_text = f"{status_text} {info['first_name']} ({days_left} hari)"
-        buttons.append([Button.inline(button_text, f"delete_{user_id}")])
+        buttons = []
+        for user_id, info in current_page_userbots:
+            status = "🟢" if info['active'] else "🔴"
+            expires = datetime.fromisoformat(info['expires_at'])
+            days_left = (expires - datetime.now()).days
+            is_running = user_id in self.userbot_manager.running_bots
+            status_text = f"{status} {'⚡️' if is_running else ''}"
+            button_text = f"{status_text} {info['first_name']} ({days_left} hari)"
+            buttons.append([Button.inline(button_text, f"delete_{user_id}")])
 
-    nav_buttons = []
-    if page > 0:
-        nav_buttons.append(Button.inline("⬅️ Kembali", f"delete_page_{page-1}"))
-    if page < total_pages - 1:
-        nav_buttons.append(Button.inline("Lanjut ➡️", f"delete_page_{page+1}"))
-    if nav_buttons:
-        buttons.append(nav_buttons)
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(Button.inline("⬅️ Kembali", f"delete_page_{page-1}"))
+        if page < total_pages - 1:
+            nav_buttons.append(Button.inline("Lanjut ➡️", f"delete_page_{page+1}"))
+        if nav_buttons:
+            buttons.append(nav_buttons)
 
-    buttons.append([Button.inline("❌ Tutup", "help_close")])
+        buttons.append([Button.inline("❌ Tutup", "help_close")])
 
-    if event.message:
-        await event.reply(text, buttons=buttons)
-    else:
-        await event.edit(text, buttons=buttons)
+        if event.message:
+            await event.reply(text, buttons=buttons)
+        else:
+            await event.edit(text, buttons=buttons)
 
     async def start(self):
         """Start the bot and register all handlers"""
         
-        @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]start$'))
+                @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]start$'))
         async def start_handler(event):
             user_id = event.sender_id
             save_user(user_id, event.sender.username)
@@ -653,7 +653,7 @@ Note:
                             continue
                         
                         if i % 5 == 0:  # Update progress every 5 users
-                                                        await progress_msg.edit(f"📤 **Mengirim broadcast... ({i}/{total_users})**")
+                            await progress_msg.edit(f"📤 **Mengirim broadcast... ({i}/{total_users})**")
                         await asyncio.sleep(0.5)  # Delay to prevent flood
 
                     await progress_msg.edit(f"""
@@ -670,7 +670,7 @@ Note:
 • User menghapus chat
 • Error jaringan
                     """)
-                    
+
                     # Back to admin menu
                     buttons = [
                         [Button.inline("🤖 Buat Userbot", "create_userbot")],
@@ -679,7 +679,7 @@ Note:
                         [Button.inline("❓ Bantuan", "help_main")]
                     ]
                     await conv.send_message("👋 **Kembali ke menu admin.**", buttons=buttons)
-                    
+
                 except asyncio.TimeoutError:
                     await conv.send_message("""
 ❌ **Waktu habis!**
@@ -773,7 +773,7 @@ Note:
                         await conv.send_message("⚠️ **User  sudah memiliki akses premium!**")
                         return
                     
-                                        await conv.send_message("""
+                    await conv.send_message("""
 ⏳ **Masukkan durasi premium dalam hari**
 
 Contoh durasi:
@@ -787,7 +787,7 @@ Contoh durasi:
                         duration = int(duration_msg.text.strip())
                         if duration < 1:
                             raise ValueError("Durasi minimal 1 hari")
-                    except ValueError:
+                                        except ValueError:
                         await conv.send_message("❌ **Error: Durasi harus berupa angka positif!**")
                         return
                     
@@ -918,7 +918,7 @@ Untuk membuat userbot, Anda memerlukan akses premium.
             """
             buttons = [
                 [Button.url("💬 Chat Admin", "https://t.me/admin")],
-                [Button.inline("◀️ Kembali ke Menu", "back_to_start")]
+                                [Button.inline("◀️ Kembali ke Menu", "back_to_start")]
             ]
             await event.edit(text, buttons=buttons)
 
@@ -1023,7 +1023,7 @@ Kirim /cancel untuk membatalkan
 
                     # Set duration based on user type
                     duration = 30 if user_id not in ADMIN_IDS else None
-                                        if duration is None:
+                    if duration is None:
                         await conv.send_message("""
 ⏳ **Masukkan durasi aktif userbot (dalam hari)**
 
@@ -1041,7 +1041,7 @@ Contoh durasi:
                             
                         try:
                             duration = int(duration_msg.text.strip())
-                            if duration < 1:
+                                                        if duration < 1:
                                 raise ValueError("Durasi minimal 1 hari")
                         except ValueError:
                             await conv.send_message("❌ **Error: Durasi harus berupa angka positif!**")
@@ -1099,6 +1099,7 @@ Silahkan hubungi admin untuk bantuan.
 💡 **Tips:**
 • Gunakan /restart jika ada masalah
 • Hubungi admin untuk perpanjang durasi
+• Backup string session dengan aman
                         """
                         buttons = [[Button.inline("◀️ Kembali", "back_to_start")]]
                         await event.reply(text, buttons=buttons)
@@ -1145,7 +1146,7 @@ Silahkan hubungi admin untuk bantuan.
                                 
                                 # Stop process if running
                                 if user_id in self.userbot_manager.running_bots:
-                                                                        process = self.userbot_manager.running_bots[user_id]
+                                    process = self.userbot_manager.running_bots[user_id]
                                     self.userbot_manager.stop_userbot(process)
                                     del self.userbot_manager.running_bots[user_id]
                                 
@@ -1155,7 +1156,7 @@ Silahkan hubungi admin untuk bantuan.
                                     text = f"""
 ⚠️ **Pemberitahuan Userbot**
 
-🤖 **User bot Anda telah kadaluarsa!**
+🤖 **User  bot Anda telah kadaluarsa!**
 
 Detail Userbot:
 • Nama: `{info['first_name']}`
@@ -1167,7 +1168,7 @@ Silahkan hubungi admin untuk perpanjang durasi.
                                     await self.bot.send_message(owner_id, text)
                                 except:
                                     pass
-                        except (ValueError, KeyError):
+                                                 except (ValueError, KeyError):
                             continue
                     
                     if expired:
