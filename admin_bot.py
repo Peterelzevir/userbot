@@ -473,51 +473,51 @@ Klik status untuk mengubah aktif/nonaktif
             await event.edit(text, buttons=buttons)
 
     async def show_delete_list(self, event, page=0):
-        """Show list of userbots for deletion"""
-        data = load_data()
+    """Show list of userbots for deletion"""
+    data = load_data()
+    
+    if not data['userbots']:
+        await event.reply("❌ **Tidak ada userbot yang ditemukan!**")
+        return
         
-        if not data['userbots']:
-            await event.reply("❌ **Tidak ada userbot yang ditemukan!**")
-            return
-            
-        text = """
+    text = """
 ❌ **Hapus Userbot**
 
 Silahkan pilih userbot yang ingin dihapus:
 • Klik pada userbot untuk konfirmasi
 • Proses tidak dapat dibatalkan
-        """
-        
-        userbots = list(data['userbots'].items())
-        total_pages = math.ceil(len(userbots) / self.page_size)
-        start_idx = page * self.page_size
-        end_idx = start_idx + self.page_size
-        current_page_userbots = userbots[start_idx:end_idx]
+    """
+    
+    userbots = list(data['userbots'].items())
+    total_pages = math.ceil(len(userbots) / self.page_size)
+    start_idx = page * self.page_size
+    end_idx = start_idx + self.page_size
+    current_page_userbots = userbots[start_idx:end_idx]
 
-        buttons = []
-        for user_id, info in current_page_userbots:
-            status = "🟢" if info['active'] else "🔴"
-            expires = datetime.fromisoformat(info['expires_at'])
-            days_left = (expires - datetime.now()).days
-            is_running = user_id in self.userbot_manager.running_bots
-            status_text = f"{status} {'⚡️' if is_running else ''}"
-            button_text = f"{status_text} {info['first_name']} ({days_left} hari)"
-            buttons.append([Button.inline(button_text, f"delete_{user_id}")])
+    buttons = []
+    for user_id, info in current_page_userbots:
+        status = "🟢" if info['active'] else "🔴"
+        expires = datetime.fromisoformat(info['expires_at'])
+        days_left = (expires - datetime.now()).days
+        is_running = user_id in self.userbot_manager.running_bots
+        status_text = f"{status} {'⚡️' if is_running else ''}"
+        button_text = f"{status_text} {info['first_name']} ({days_left} hari)"
+        buttons.append([Button.inline(button_text, f"delete_{user_id}")])
 
-        nav_buttons = []
-        if page > 0:
-            nav_buttons.append(Button.inline("⬅️ Kembali", f"delete_page_{page-1}"))
-        if page < total_pages - 1:
-            nav_buttons.append(Button.inline("Lanjut ➡️", f"delete_page_{page+1}"))
-        if nav_buttons:
-            buttons.append(nav_buttons)
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(Button.inline("⬅️ Kembali", f"delete_page_{page-1}"))
+    if page < total_pages - 1:
+        nav_buttons.append(Button.inline("Lanjut ➡️", f"delete_page_{page+1}"))
+    if nav_buttons:
+        buttons.append(nav_buttons)
 
-        buttons.append([Button.inline("❌ Tutup", "help_close")])
+    buttons.append([Button.inline("❌ Tutup", "help_close")])
 
-                if event.message:
-            await event.reply(text, buttons=buttons)
-        else:
-            await event.edit(text, buttons=buttons)
+    if event.message:  # Pastikan indentasi di sini benar
+        await event.reply(text, buttons=buttons)
+    else:
+        await event.edit(text, buttons=buttons)
 
     async def start(self):
         """Start the bot and register all handlers"""
