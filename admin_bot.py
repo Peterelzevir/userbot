@@ -343,7 +343,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
             # Save process
             self.userbot_manager.running_bots[str(me.id)] = result
             
-            success_text = f"""
+                        success_text = f"""
 🤖 **User  bot berhasil dibuat dan dijalankan!**
 
 👤 **Detail Userbot:**
@@ -359,7 +359,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
 📱 **Perintah Tersedia:**
 • .help - Lihat bantuan
 • .hiyaok - Mulai forward message 
-• .listgrup - List grup
+• .listgrup - Lihat daftar grup
 • .ban - Ban grup dari forward
 • .stop - Stop semua forward
 
@@ -377,10 +377,10 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
 • API Hash: `{api_hash}`
 
 🔒 **SIMPAN INFORMASI DI ATAS DENGAN AMAN!**
-                """
-                
-                # Send userbot details
-                await conv.send_message(success_text)
+            """
+            
+            # Send userbot details
+            await conv.send_message(success_text)
                 
                 # Send back to main menu based on owner ID role.
                 buttons = [
