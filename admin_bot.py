@@ -383,6 +383,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
             await conv.send_message(success_text)
                 
                 # Send back to main menu based on owner ID role.
+                buttons = []
                 if owner_id in ADMIN_IDS:
                     buttons = [
                         [Button.inline("🤖 Buat Userbot", "create_userbot")],
