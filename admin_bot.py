@@ -383,15 +383,18 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
             await conv.send_message(success_text)
                 
                 # Send back to main menu based on owner ID role.
-                buttons = [
-                    [Button.inline("🤖 Buat Userbot", "create_userbot")],
-                    [Button.inline("👥 Add Premium", "add_premium")],
-                    [Button.inline("📢 Broadcast", "broadcast")],
-                    [Button.inline("❓ Bantuan", "help_main")]
-                ] if owner_id in ADMIN_IDS else [
-                    [Button.inline("🤖 Cek Status", "check_status")],
-                    [Button.inline("❓ Bantuan", "help_main")]
-                ]
+                if owner_id in ADMIN_IDS:
+                    buttons = [
+                        [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                        [Button.inline("👥 Add Premium", "add_premium")],
+                        [Button.inline("📢 Broadcast", "broadcast")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    [
+                else:
+                    buttons = [
+                        [Button.inline("🤖 Cek Status", "check_status")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    ]
                 
                 await conv.send_message("👋 **Kembali ke menu utama.**", buttons=buttons)
                 
