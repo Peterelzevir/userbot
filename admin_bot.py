@@ -149,15 +149,15 @@ async def verify_session(session_str, api_id, api_hash):
             
         return True
         
-        except Exception as e:
+    except Exception as e:
         logger.error(f"Session verification error: {str(e)}")
         return False
     finally:
         if client:
             try:
                 await client.disconnect()
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"Error disconnecting client: {str(e)}")
 
 class AdminBot:
     def __init__(self):
