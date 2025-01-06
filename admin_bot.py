@@ -281,20 +281,19 @@ Format: 1 2 3 4 5 (pisahkan dengan spasi)
                 return
 
             try:
-                await client.sign_in(phone=phone, code=otp, phone_                code_phone_hash=code.phone_code_hash)
-            except PhoneCodeInvalidError:
-                await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
-                return
-            
-            except SessionPasswordNeededError:
-                await conv.send_message("🔐 **Akun ini menggunakan verifikasi 2 langkah. Silahkan masukkan password:**")
-                
-                try:
-                    password = await conv.get_response(timeout=300)
-                    await client.sign_in(password=password.text)
-                except asyncio.TimeoutError:
-                    await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
-                    return
+    await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
+except PhoneCodeInvalidError:
+    await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
+    return
+except SessionPasswordNeededError:
+    await conv.send_message("🔐 **Akun ini menggunakan verifikasi 2 langkah. Silahkan masukkan password:**")
+    
+    try:
+        password = await conv.get_response(timeout=300)
+        await client.sign_in(password=password.text)
+    except asyncio.TimeoutError:
+        await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
+        return
             
             me = await client.get_me()
             session_string = client.session.save()
