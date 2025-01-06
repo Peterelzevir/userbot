@@ -514,7 +514,7 @@ Silahkan pilih userbot yang ingin dihapus:
 
     buttons.append([Button.inline("❌ Tutup", "help_close")])
 
-    if event.message:  # Pastikan indentasi di sini benar
+    if event.message:
         await event.reply(text, buttons=buttons)
     else:
         await event.edit(text, buttons=buttons)
