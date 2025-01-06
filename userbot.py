@@ -2,11 +2,23 @@ from telethon import TelegramClient, events, utils
 from telethon.tl.types import InputPeerChannel
 from telethon.errors import RPCError, FloodWaitError, ChatWriteForbiddenError
 from telethon.sessions import StringSession
-from config import *
 import asyncio
 import os
+import sys
 from typing import Dict, List
 from datetime import datetime
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('userbot.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 class ForwardTask:
     def __init__(self, message_id: int, chat_id: int, delay: int):
@@ -23,16 +35,15 @@ class ForwardTask:
 class Userbot:
     def __init__(self, session_string, api_id, api_hash):
         self.client = TelegramClient(StringSession(session_string), api_id, api_hash, 
-                                   device_model=APP_VERSION)
+                                   device_model="Userbot v1.0")
         self.banned_groups = set()
         self.forward_tasks: Dict[str, ForwardTask] = {}  # key: task_id (chat_id_msg_id)
         
     async def start(self):
+        """Start userbot and register handlers"""
         await self.client.start()
+        print("Userbot started successfully!")
         
-        # Check expiry every hour
-        asyncio.create_task(self._check_expiry())
-
         @self.client.on(events.NewMessage(pattern=r'(?i)[!/\.]help$'))
         async def help_handler(event):
             if event.sender_id != event.client.uid:
@@ -42,46 +53,55 @@ class Userbot:
 📱 **USERBOT COMMANDS**
 
 📤 **Forward Commands:**
-• `.hiyaok <delay>` - Start forwarding message (reply to message)
-  Example: `.hiyaok 5` (5 minutes delay)
+• `.hiyaok <delay>` - Start forwarding message (reply ke pesan)
+  Example: `.hiyaok 5` (delay 5 menit)
   
-• `.detail` - Show active forward tasks details
-• `.stop` - Stop all forward tasks
-• `.delforward <task_id>` - Delete specific forward task
-• `.setdelay <task_id> <minutes>` - Set delay for specific task
+• `.detail` - Tampilkan detail forward yang aktif
+• `.stop` - Stop semua forward task
+• `.delforward <task_id>` - Hapus forward task tertentu
+• `.setdelay <task_id> <menit>` - Set delay untuk task
 
-👥 **Group Management:**
-• `.listgrup` - List all groups
-• `.ban` - Ban current group from forwards
-• `.listban` - List banned groups
-• `.deleteban` - Remove current group from ban list
+👥 **Group Commands:**
+• `.listgrup` - List semua grup
+• `.ban` - Ban grup dari forward
+• `.listban` - List grup yang dibanned
+• `.deleteban` - Hapus grup dari ban list
 
-⚙️ **Notes:**
-• Maximum 10 simultaneous forward tasks
-• Each task will forward to all groups except banned ones
-• Forward process: Send to all groups → Wait delay → Repeat
-• Tasks auto-stop if original message is deleted
+⚙️ **Catatan:**
+• Maksimal 10 forward task bersamaan
+• Forward akan ke semua grup kecuali yang dibanned
+• Proses: Kirim ke semua grup → Tunggu delay → Ulangi
+• Task berhenti jika pesan sumber dihapus
 
-❗️ If you encounter any issues, use .stop to stop all tasks
+❗️ Jika ada masalah, gunakan .stop untuk hentikan semua task
 """
             await event.reply(help_text, parse_mode='md')
-
-        @self.client.on(events.NewMessage(pattern=r'[!/\.]hiyaok'))
+            
+            @self.client.on(events.NewMessage(pattern=r'[!/\.]hiyaok'))
         async def hiyaok_handler(event):
             if event.sender_id != event.client.uid:
                 return
                 
             if not event.is_reply:
-                await event.reply("❌ **Error:** Please reply to a message to forward", parse_mode='md')
+                await event.reply("""
+❌ **Error:** Harap reply ke pesan yang ingin diforward
+
+Contoh penggunaan:
+1. Reply ke pesan yang mau diforward
+2. Ketik: `.hiyaok 5` (delay 5 menit)
+                """, parse_mode='md')
                 return
             
             # Check if maximum tasks reached
             if len(self.forward_tasks) >= 10:
-                await event.reply(
-                    "⚠️ **Error:** Maximum forward tasks (10) reached!\n"
-                    "Use `.stop` or `.delforward` to remove existing tasks first.",
-                    parse_mode='md'
-                )
+                await event.reply("""
+⚠️ **Error:** Maksimal forward task (10) tercapai!
+
+Gunakan:
+• `.stop` untuk stop semua task
+• `.delforward` untuk hapus task tertentu
+• `.detail` untuk lihat task yang aktif
+                """, parse_mode='md')
                 return
 
             try:
@@ -90,26 +110,34 @@ class Userbot:
                     raise ValueError
                 delay = int(args[1])
                 if delay < 1:
-                    await event.reply("⚠️ **Error:** Delay must be at least 1 minute", parse_mode='md')
+                    await event.reply("""
+⚠️ **Error:** Delay minimal 1 menit
+
+Format command:
+`.hiyaok <delay_in_minutes>`
+Example: `.hiyaok 5`
+                    """, parse_mode='md')
                     return
             except ValueError:
-                await event.reply(
-                    "❌ **Error:** Invalid command format\n"
-                    "Usage: `.hiyaok <delay>`\n"
-                    "Example: `.hiyaok 5` (5 minutes delay)",
-                    parse_mode='md'
-                )
+                await event.reply("""
+❌ **Error:** Format command tidak valid
+
+Penggunaan yang benar:
+• `.hiyaok <delay>`
+• Example: `.hiyaok 5` (delay 5 menit)
+                """, parse_mode='md')
                 return
 
             replied_msg = await event.get_reply_message()
             task_id = f"{replied_msg.chat_id}_{replied_msg.id}"
 
             if task_id in self.forward_tasks:
-                await event.reply(
-                    "⚠️ **Error:** This message is already being forwarded!\n"
-                    f"Task ID: `{task_id}`",
-                    parse_mode='md'
-                )
+                await event.reply(f"""
+⚠️ **Error:** Pesan ini sudah dalam proses forward!
+
+Task ID: `{task_id}`
+Gunakan `.detail` untuk cek status
+                """, parse_mode='md')
                 return
 
             self.forward_tasks[task_id] = ForwardTask(
@@ -123,11 +151,11 @@ class Userbot:
 
         async def _forward_message(self, task_id: str, event):
             task = self.forward_tasks[task_id]
-            initial_msg = await event.reply("🔄 **Starting forward process...**", parse_mode='md')
+            initial_msg = await event.reply("🔄 **Memulai proses forward...**", parse_mode='md')
 
             while task.running:
                 try:
-                    # Try to get the message first to check if it exists
+                    # Check if source message still exists
                     message = await self.client.get_messages(task.chat_id, ids=task.message_id)
                     if not message:
                         raise RPCError("Message was deleted")
@@ -157,7 +185,7 @@ class Userbot:
                                     failed_groups.append(f"{dialog.title}: Flood limit")
                             except ChatWriteForbiddenError:
                                 failed += 1
-                                failed_groups.append(f"{dialog.title}: Bot is banned/restricted")
+                                failed_groups.append(f"{dialog.title}: Bot dibanned/dibatasi")
                             except Exception as e:
                                 failed += 1
                                 failed_groups.append(f"{dialog.title}: {str(e)}")
@@ -169,30 +197,30 @@ class Userbot:
                     runtime = datetime.now() - task.start_time
                     hours, remainder = divmod(runtime.seconds, 3600)
                     minutes, seconds = divmod(remainder, 60)
-
+                    
                     status = f"""
 📊 **Forward Status:**
 🆔 Task ID: `{task_id}`
 ⏱ Runtime: `{hours}h {minutes}m {seconds}s`
 
-📝 **Message Preview:**
+📝 **Pesan Preview:**
 `{task.last_preview[:100]}...`
 
-📈 **Current Cycle:**
-✅ Success: `{success}`
-❌ Failed: `{failed}`
+📈 **Cycle Ini:**
+✅ Sukses: `{success}`
+❌ Gagal: `{failed}`
 
-📊 **Total Stats:**
-✅ Total Success: `{task.success_count}`
-❌ Total Failed: `{task.failed_count}`
+📊 **Total Statistik:**
+✅ Total Sukses: `{task.success_count}`
+❌ Total Gagal: `{task.failed_count}`
 
-⚠️ **Failed Groups (Last Cycle):**
+⚠️ **Grup yang Gagal (Cycle Ini):**
 ```
-{chr(10).join(failed_groups[:5]) if failed_groups else 'None'}
+{chr(10).join(failed_groups[:5]) if failed_groups else 'Tidak ada'}
 {'...' if len(failed_groups) > 5 else ''}
 ```
 
-⏳ Waiting {task.delay} minutes before next cycle...
+⏳ Menunggu {task.delay} menit untuk cycle berikutnya...
                     """
                     await initial_msg.edit(status, parse_mode='md')
 
@@ -203,14 +231,14 @@ class Userbot:
                     if "MESSAGE_ID_INVALID" in str(e) or not message:
                         runtime = datetime.now() - task.start_time
                         error_msg = f"""
-⚠️ **Forward Task Stopped!**
+⚠️ **Forward Task Berhenti!**
 
-❌ **Reason:** Original message was deleted or not found
+❌ **Alasan:** Pesan sumber dihapus/tidak ditemukan
 🆔 **Task ID:** `{task_id}`
 
-📊 **Final Stats:**
-✅ Total Success: `{task.success_count}`
-❌ Total Failed: `{task.failed_count}`
+📊 **Statistik Akhir:**
+✅ Total Sukses: `{task.success_count}`
+❌ Total Gagal: `{task.failed_count}`
 ⏱ Runtime: `{hours}h {minutes}m {seconds}s`
                         """
                         await initial_msg.edit(error_msg, parse_mode='md')
@@ -223,7 +251,7 @@ class Userbot:
 Task ID: `{task_id}`
 Error: `{str(e)}`
 
-Task will continue in {task.delay} minutes...
+Task akan dilanjutkan dalam {task.delay} menit...
                         """
                         await initial_msg.edit(error_msg, parse_mode='md')
                         if task.running:
@@ -235,7 +263,7 @@ Task will continue in {task.delay} minutes...
 Task ID: `{task_id}`
 Error: `{str(e)}`
 
-Task will continue in {task.delay} minutes...
+Task akan dilanjutkan dalam {task.delay} menit...
                     """
                     await initial_msg.edit(error_msg, parse_mode='md')
                     if task.running:
@@ -247,7 +275,7 @@ Task will continue in {task.delay} minutes...
                 return
 
             if not self.forward_tasks:
-                await event.reply("📝 No active forward tasks.", parse_mode='md')
+                await event.reply("📝 Tidak ada forward task yang aktif.", parse_mode='md')
                 return
 
             details = []
@@ -259,14 +287,17 @@ Task will continue in {task.delay} minutes...
                 details.append(f"""
 🔄 **Task ID:** `{task_id}`
 📝 **Preview:** `{task.last_preview[:100]}...`
-⏱ **Delay:** `{task.delay} minutes`
+⏱ **Delay:** `{task.delay} menit`
 ⏳ **Runtime:** `{hours}h {minutes}m {seconds}s`
-📊 **Stats:**
-• Total Success: `{task.success_count}`
-• Total Failed: `{task.failed_count}`
+📊 **Statistik:**
+• Total Sukses: `{task.success_count}`
+• Total Gagal: `{task.failed_count}`
 """)
 
-            await event.reply("📋 **Active Forward Tasks:**\n" + "\n".join(details), parse_mode='md')
+            await event.reply(
+                "📋 **Active Forward Tasks:**\n" + "\n".join(details),
+                parse_mode='md'
+            )
 
         @self.client.on(events.NewMessage(pattern=r'[!/\.]setdelay'))
         async def setdelay_handler(event):
@@ -282,33 +313,41 @@ Task will continue in {task.delay} minutes...
                 delay = int(args[2])
                 
                 if delay < 1:
-                    await event.reply("⚠️ **Error:** Delay must be at least 1 minute", parse_mode='md')
+                    await event.reply("""
+⚠️ **Error:** Delay minimal 1 menit
+
+Format: `.setdelay <task_id> <minutes>`
+                    """, parse_mode='md')
                     return
 
                 if task_id in self.forward_tasks:
                     self.forward_tasks[task_id].delay = delay
-                    await event.reply(
-                        f"⏱️ **Success:** Delay for task `{task_id}` set to `{delay}` minutes", 
-                        parse_mode='md'
-                    )
+                    await event.reply(f"""
+⏱️ **Berhasil!**
+Delay untuk task `{task_id}` diset ke `{delay}` menit
+                    """, parse_mode='md')
                 else:
-                    await event.reply("❌ **Error:** Task not found!", parse_mode='md')
+                    await event.reply("""
+❌ **Error:** Task tidak ditemukan!
+Gunakan `.detail` untuk cek task yang aktif
+                    """, parse_mode='md')
             except ValueError:
-                await event.reply(
-                    "❌ **Error:** Invalid command format\n"
-                    "Usage: `.setdelay <task_id> <minutes>`\n"
-                    "Example: `.setdelay 123_456 5`",
-                    parse_mode='md'
-                )
+                await event.reply("""
+❌ **Error:** Format command tidak valid
 
-        @self.client.on(events.NewMessage(pattern=r'[!/\.]stop'))
+Penggunaan:
+• `.setdelay <task_id> <minutes>`
+• Example: `.setdelay 123_456 5`
+                """, parse_mode='md')
+                
+                @self.client.on(events.NewMessage(pattern=r'[!/\.]stop'))
         async def stop_handler(event):
             if event.sender_id != event.client.uid:
                 return
                 
             stopped_count = len(self.forward_tasks)
             if stopped_count == 0:
-                await event.reply("ℹ️ No active tasks to stop.", parse_mode='md')
+                await event.reply("ℹ️ Tidak ada task yang aktif.", parse_mode='md')
                 return
 
             task_details = []
@@ -327,11 +366,11 @@ Task will continue in {task.delay} minutes...
 
             self.forward_tasks.clear()
                 
-            await event.reply(
-                f"🛑 **Stopped {stopped_count} forward tasks**\n\n"
-                "**Task Details:**" + "\n".join(task_details),
-                parse_mode='md'
-            )
+            await event.reply(f"""
+🛑 **Menghentikan {stopped_count} forward task**
+
+**Detail Task yang Dihentikan:**{chr(10).join(task_details)}
+                """, parse_mode='md')
 
         @self.client.on(events.NewMessage(pattern=r'[!/\.]delforward'))
         async def delforward_handler(event):
@@ -350,27 +389,28 @@ Task will continue in {task.delay} minutes...
                     del self.forward_tasks[task_id]
                     
                     await event.reply(f"""
-✅ **Forward task deleted**
+✅ **Forward task dihapus!**
 
-🆔 **Task Details:**
+🆔 **Detail Task:**
 • Task ID: `{task_id}`
 • Success: `{task.success_count}`
 • Failed: `{task.failed_count}`
 • Runtime: `{hours}h {minutes}m {seconds}s`
                     """, parse_mode='md')
                 else:
-                    await event.reply(
-                        "❌ **Error:** Task not found!\n"
-                        "Use `.detail` to see active tasks.",
-                        parse_mode='md'
-                    )
+                    await event.reply("""
+❌ **Error:** Task tidak ditemukan!
+
+Gunakan `.detail` untuk lihat task yang aktif.
+                    """, parse_mode='md')
             except IndexError:
-                await event.reply(
-                    "❌ **Error:** Please specify task ID\n"
-                    "Usage: `.delforward <task_id>`\n"
-                    "Use `.detail` to see task IDs.",
-                    parse_mode='md'
-                )
+                await event.reply("""
+❌ **Error:** Harap sertakan Task ID
+
+Penggunaan:
+• `.delforward <task_id>`
+• Gunakan `.detail` untuk lihat Task ID
+                """, parse_mode='md')
 
         @self.client.on(events.NewMessage(pattern=r'[!/\.]listgrup'))
         async def listgrup_handler(event):
@@ -380,25 +420,48 @@ Task will continue in {task.delay} minutes...
             groups = []
             async for dialog in self.client.iter_dialogs():
                 if dialog.is_group:
-                    member_count = await self.client.get_participants(dialog, limit=0)
-                    groups.append(f"📢 Group: {dialog.title}\n"
-                                f"🆔 ID: `{dialog.id}`\n"
-                                f"👥 Members: {len(member_count)}\n"
-                                f"{'🚫 Banned' if dialog.id in self.banned_groups else '✅ Active'}\n")
+                    try:
+                        member_count = await self.client.get_participants(dialog, limit=0)
+                        groups.append(f"""
+📢 Grup: {dialog.title}
+🆔 ID: `{dialog.id}`
+👥 Members: {len(member_count)}
+{('🚫 Di-ban' if dialog.id in self.banned_groups else '✅ Aktif')}
+                        """)
+                    except Exception as e:
+                        groups.append(f"""
+📢 Grup: {dialog.title}
+🆔 ID: `{dialog.id}`
+👥 Members: Error counting
+⚠️ Error: {str(e)}
+                        """)
             
             groups_text = "\n".join(groups)
             
             if len(groups_text) > 4000:
-                with open("groups_list.txt", "w", encoding='utf-8') as f:
-                    f.write(groups_text)
-                await event.reply("📋 Group list is too long, sending as file...",
-                                  file="groups_list.txt")
-                os.remove("groups_list.txt")
+                # Split into multiple messages if too long
+                message_parts = []
+                current_part = "📋 **Daftar Grup:**\n"
+                
+                for group in groups:
+                    if len(current_part) + len(group) > 4000:
+                        message_parts.append(current_part)
+                        current_part = "📋 **Daftar Grup (Lanjutan):**\n" + group
+                    else:
+                        current_part += group
+                
+                if current_part:
+                    message_parts.append(current_part)
+                
+                for part in message_parts:
+                    await event.reply(part, parse_mode='md')
             else:
-                await event.reply(f"**📋 Your Groups List:**\n\n{groups_text}",
-                                  parse_mode='md')
-
-        @self.client.on(events.NewMessage(pattern=r'[!/\.]ban'))
+                await event.reply(
+                    f"📋 **Daftar Grup:**\n{groups_text}",
+                    parse_mode='md'
+                )
+                
+                @self.client.on(events.NewMessage(pattern=r'[!/\.]ban'))
         async def ban_handler(event):
             if event.sender_id != event.client.uid:
                 return
@@ -408,18 +471,18 @@ Task will continue in {task.delay} minutes...
                     self.banned_groups.add(event.chat_id)
                     group = await event.get_chat()
                     await event.reply(f"""
-🚫 **Group Banned from Forwards**
+🚫 **Grup Di-ban dari Forward**
 
-👥 **Group Details:**
-• Name: `{group.title}`
+👥 **Detail Grup:**
+• Nama: `{group.title}`
 • ID: `{event.chat_id}`
 
-Use `.deleteban` in this group to unban.
+Gunakan `.deleteban` di grup ini untuk unban.
                     """, parse_mode='md')
                 else:
-                    await event.reply("ℹ️ This group is already banned from forwards.", parse_mode='md')
+                    await event.reply("ℹ️ Grup ini sudah di-ban dari forward.", parse_mode='md')
             else:
-                await event.reply("❌ This command only works in groups!", parse_mode='md')
+                await event.reply("❌ Command ini hanya berfungsi di grup!", parse_mode='md')
 
         @self.client.on(events.NewMessage(pattern=r'[!/\.]listban'))
         async def listban_handler(event):
@@ -427,7 +490,7 @@ Use `.deleteban` in this group to unban.
                 return
                 
             if not self.banned_groups:
-                await event.reply("📋 **No banned groups**", parse_mode='md')
+                await event.reply("📋 **Tidak ada grup yang di-ban**", parse_mode='md')
                 return
                 
             banned = []
@@ -439,10 +502,10 @@ Use `.deleteban` in this group to unban.
                     banned.append(f"• Unknown Group (`{group_id}`)")
             
             await event.reply(f"""
-📋 **Banned Groups List:**
+📋 **Daftar Grup yang Di-ban:**
 {chr(10).join(banned)}
 
-Total: `{len(self.banned_groups)}` groups
+Total: `{len(self.banned_groups)}` grup
             """, parse_mode='md')
 
         @self.client.on(events.NewMessage(pattern=r'[!/\.]deleteban'))
@@ -455,20 +518,73 @@ Total: `{len(self.banned_groups)}` groups
                     self.banned_groups.remove(event.chat_id)
                     group = await event.get_chat()
                     await event.reply(f"""
-✅ **Group Unbanned**
+✅ **Grup Berhasil Di-unban**
 
-👥 **Group Details:**
-• Name: `{group.title}`
+👥 **Detail Grup:**
+• Nama: `{group.title}`
 • ID: `{event.chat_id}`
 
-This group will now receive forwards.
+Grup ini akan menerima forward lagi.
                     """, parse_mode='md')
                 else:
-                    await event.reply("ℹ️ This group is not banned.", parse_mode='md')
+                    await event.reply("ℹ️ Grup ini tidak sedang di-ban.", parse_mode='md')
             else:
-                await event.reply("❌ This command only works in groups!", parse_mode='md')
+                await event.reply("❌ Command ini hanya berfungsi di grup!", parse_mode='md')
 
-    async def _check_expiry(self):
-        while True:
-            check_expiry()
-            await asyncio.sleep(3600)  # Check every hour
+        # Add status command
+        @self.client.on(events.NewMessage(pattern=r'[!/\.]status'))
+        async def status_handler(event):
+            if event.sender_id != event.client.uid:
+                return
+            
+            me = await self.client.get_me()
+            active_tasks = len(self.forward_tasks)
+            banned_count = len(self.banned_groups)
+            
+            total_forwards = sum(task.success_count for task in self.forward_tasks.values())
+            total_fails = sum(task.failed_count for task in self.forward_tasks.values())
+            
+            await event.reply(f"""
+🤖 **Userbot Status**
+
+👤 **Account Info:**
+• Name: `{me.first_name}`
+• ID: `{me.id}`
+• Phone: `{me.phone}`
+
+📊 **Statistics:**
+• Active Tasks: `{active_tasks}/10`
+• Banned Groups: `{banned_count}`
+• Total Forwards: `{total_forwards}`
+• Total Fails: `{total_fails}`
+
+💡 Use `.help` for commands list
+            """, parse_mode='md')
+
+if __name__ == "__main__":
+    # Check arguments
+    if len(sys.argv) != 4:
+        print("Usage: python userbot.py <session_string> <api_id> <api_hash>")
+        sys.exit(1)
+
+    session_string = sys.argv[1]
+    api_id = int(sys.argv[2])
+    api_hash = sys.argv[3]
+
+    # Create and start userbot
+    print("Starting userbot...")
+    userbot = Userbot(session_string, api_id, api_hash)
+
+    loop = asyncio.get_event_loop()
+    
+    try:
+        print("Connecting to Telegram...")
+        loop.run_until_complete(userbot.start())
+        print("Userbot is running!")
+        loop.run_forever()
+    except KeyboardInterrupt:
+        print("Stopping userbot...")
+    except Exception as e:
+        print(f"Error: {str(e)}")
+    finally:
+        loop.close()
