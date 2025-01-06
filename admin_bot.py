@@ -234,7 +234,7 @@ Silahkan pilih kategori bantuan di bawah ini:
         }
 
     async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
-    """Create new userbot session with enhanced error handling"""
+          """Create new userbot session with enhanced error handling"""
     client = None
     
     try:
