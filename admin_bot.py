@@ -234,115 +234,116 @@ Silahkan pilih kategori bantuan di bawah ini:
         }
 
     async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
-        """Create new userbot session with enhanced error handling"""
-        client = None
-        
+    """Create new userbot session with enhanced error handling"""
+    client = None
+    
+    try:
+        # Validate inputs
         try:
-            # Validate inputs
-            try:
-                api_id = int(api_id)
-            except ValueError:
-                await conv.send_message("❌ **Error: API ID harus berupa angka!**")
+            api_id = int(api_id)
+        except ValueError:
+            await conv.send_message("❌ **Error: API ID harus berupa angka!**")
+            return
+
+        # Check if phone number already has a userbot
+        data = load_data()
+        for bot_info in data['userbots'].values():
+            if bot_info['phone'] == phone:
+                await conv.send_message("❌ **Error: Nomor telepon ini sudah memiliki userbot!**")
                 return
 
-            # Check if phone number already has a userbot
-            data = load_data()
-            for bot_info in data['userbots'].values():
-                if bot_info['phone'] == phone:
-                    await conv.send_message("❌ **Error: Nomor telepon ini sudah memiliki userbot!**")
-                    return
+        # Create client and connect
+        client = TelegramClient(StringSession(), api_id, api_hash, device_model=APP_VERSION)
+        await client.connect()
+        
+        await conv.send_message("⏳ **Memproses permintaan login...**")
 
-            # Create client and connect
-            client = TelegramClient(StringSession(), api_id, api_hash, device_model=APP_VERSION)
-            await client.connect()
-            
-            await conv.send_message("⏳ **Memproses permintaan login...**")
-
-            try:
-                code = await client.send_code_request(phone)
-            except FloodWaitError as e:
-                wait_time = str(timedelta(seconds=e.seconds))
-                await conv.send_message(f"❌ **Terlalu banyak percobaan! Silahkan tunggu {wait_time} sebelum mencoba lagi.**")
-                return
-            
-            await conv.send_message("""
+        try:
+            code = await client.send_code_request(phone)
+        except FloodWaitError as e:
+            wait_time = str(timedelta(seconds=e.seconds))
+            await conv.send_message(f"❌ **Terlalu banyak percobaan! Silahkan tunggu {wait_time} sebelum mencoba lagi.**")
+            return
+        
+        await conv.send_message("""
 📲 **Masukkan kode OTP**
 
 Format: 1 2 3 4 5 (pisahkan dengan spasi)
 
 ⏳ Waktu: 5 menit
-            """)
+        """)
 
+        try:
+            otp_msg = await conv.get_response(timeout=300)
+            otp = ''.join(otp_msg.text.split())
+        except asyncio.TimeoutError:
+            await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
+            return
+
+        try:
+            await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
+        except PhoneCodeInvalidError:
+            await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
+            return
+        
+        except SessionPasswordNeededError:
+            await conv.send_message("🔐 **Akun ini menggunakan verifikasi 2 langkah. Silahkan masukkan password:**")
+            
             try:
-                otp_msg = await conv.get_response(timeout=300)
-                otp = ''.join(otp_msg.text.split())
+                password = await conv.get_response(timeout=300)
+                await client.sign_in(password=password.text)
             except asyncio.TimeoutError:
                 await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
                 return
+        
+        me = await client.get_me()
+        session_string = client.session.save()
 
-            try:
-    await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
-except PhoneCodeInvalidError:
-    await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
-    return
-except SessionPasswordNeededError:
-    await conv.send_message("🔐 **Akun ini menggunakan verifikasi 2 langkah. Silahkan masukkan password:**")
-    
-    try:
-        password = await conv.get_response(timeout=300)
-        await client.sign_in(password=password.text)
-    except asyncio.TimeoutError:
-        await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
-        return
-            
-            me = await client.get_me()
-            session_string = client.session.save()
+        # Test if session works
+        is_working = await verify_session(session_string, api_id, api_hash)
+        if not is_working:
+            await conv.send_message("❌ **Error: Gagal memverifikasi sesi userbot. Silahkan coba lagi.**")
+            return
+        
+        # Save userbot data
+        data = load_data()
+        expiry_date = (datetime.now() + timedelta(days=duration)).isoformat()
 
-            # Test if session works
-            is_working = await verify_session(session_string, api_id, api_hash)
-            if not is_working:
-                await conv.send_message("❌ **Error: Gagal memverifikasi sesi userbot. Silahkan coba lagi.**")
-                return
+        data['userbots'][str(me.id)] = {
+            'first_name': me.first_name,
+            'last_name': me.last_name,
+            'phone': phone,
+            'created_at': datetime.now().isoformat(),
+            'expires_at': expiry_date,
+            'active': True,
+            'session': session_string,
+            'owner_id': owner_id,
+            'api_id': api_id,
+            'api_hash': api_hash
+        }
+        
+        if save_data(data):
+            # Start the userbot
+            success, result = await self.userbot_manager.start_userbot(
+                session_string,
+                api_id,
+                api_hash
+            )
             
-            # Save userbot data
-            data = load_data()
-            expiry_date = (datetime.now() + timedelta(days=duration)).isoformat()
-
-            data['userbots'][str(me.id)] = {
-                'first_name': me.first_name,
-                'last_name': me.last_name,
-                'phone': phone,
-                'created_at': datetime.now().isoformat(),
-                'expires_at': expiry_date,
-                'active': True,
-                'session': session_string,
-                'owner_id': owner_id,
-                'api_id': api_id,
-                'api_hash': api_hash
-            }
-            
-            if save_data(data):
-                # Start the userbot
-                success, result = await self.userbot_manager.start_userbot(
-                    session_string,
-                    api_id,
-                    api_hash
-                )
-                
-                if not success:
-                    error_msg = f"""
+            if not success:
+                error_msg = f"""
 ❌ **Error saat menjalankan userbot:**
 `{result}`
 
 Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
-                    """
-                    await conv.send_message(error_msg)
-                    return
-                    
-                # Save process
-                self.userbot_manager.running_bots[str(me.id)] = result
+                """
+                await conv.send_message(error_msg)
+                return
                 
-                success_text = f"""
+            # Save process
+            self.userbot_manager.running_bots[str(me.id)] = result
+            
+            success_text = f"""
 🤖 **User  bot berhasil dibuat dan dijalankan!**
 
 👤 **Detail Userbot:**
@@ -358,7 +359,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
 📱 **Perintah Tersedia:**
 • .help - Lihat bantuan
 • .hiyaok - Mulai forward message 
-• .listgrup - Lihat daftar grup
+• .listgrup - List grup
 • .ban - Ban grup dari forward
 • .stop - Stop semua forward
 
