@@ -488,7 +488,7 @@ Silahkan pilih userbot yang ingin dihapus:
     async def start(self):
         """Start the bot and register all handlers"""
         
-                @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]start$'))
+        @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]start$'))
         async def start_handler(event):
             user_id = event.sender_id
             save_user(user_id, event.sender.username)
