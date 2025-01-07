@@ -344,7 +344,7 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
             self.userbot_manager.running_bots[str(me.id)] = result
             
             success_text = f"""
-🤖 **User  bot berhasil dibuat dan dijalankan!**
+🤖 **User   bot berhasil dibuat dan dijalankan!**
 
 👤 **Detail Userbot:**
 • First Name: `{me.first_name}`
