@@ -1007,7 +1007,7 @@ Contoh durasi:
                             
                         try:
                             duration = int(duration_msg.text.strip())
-                                                        if duration < 1:
+                                           if duration < 1:
                                 raise ValueError("Durasi minimal 1 hari")
                         except ValueError:
                             await conv.send_message("❌ **Error: Durasi harus berupa angka positif!**")
