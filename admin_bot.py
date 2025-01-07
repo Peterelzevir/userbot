@@ -234,7 +234,7 @@ Silahkan pilih kategori bantuan di bawah ini:
         }
 
     async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
-          """Create new userbot session with enhanced error handling"""
+    """Create new userbot session with enhanced error handling"""
     client = None
     
     try:
@@ -381,34 +381,33 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
             
             # Send userbot details
             await conv.send_message(success_text)
-                
-                # Send back to main menu based on owner ID role.
-                buttons = []
-                if owner_id in ADMIN_IDS:
-                    buttons = [
-                        [Button.inline("🤖 Buat Userbot", "create_userbot")],
-                        [Button.inline("👥 Add Premium", "add_premium")],
-                        [Button.inline("📢 Broadcast", "broadcast")],
-                        [Button.inline("❓ Bantuan", "help_main")]
-                  ]
-                else:
-                    buttons = [
-                        [Button.inline("🤖 Cek Status", "check_status")],
-                        [Button.inline("❓ Bantuan", "help_main")]
-                    ]
-                
-                await conv.send_message("👋 **Kembali ke menu utama.**", buttons=buttons)
-
-               else:
-                 await conv.send_message("❌ **Error saat menyimpan data userbot!**")         
-             except Exception as e:
-               await conv.send_message(f"❌ **Error tidak terduga:** `{str(e)}`")   
-           finally:
-             if client:
-                try:
-                   await client.disconnect()
-                except Exception as e:
-                  logger.error(f"Error disconnecting client: {str(e)}")
+            
+            # Send back to main menu based on owner ID role.
+            buttons = []
+            if owner_id in ADMIN_IDS:
+                buttons = [
+                    [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                    [Button.inline("👥 Add Premium", "add_premium")],
+                    [Button.inline("📢 Broadcast", "broadcast")],
+                    [Button.inline("❓ Bantuan", "help_main")]
+                ]
+            else:
+                buttons = [
+                    [Button.inline("🤖 Cek Status", "check_status")],
+                    [Button.inline("❓ Bantuan", "help_main")]
+                ]
+            
+            await conv.send_message("👋 **Kembali ke menu utama.**", buttons=buttons)               
+        else:
+            await conv.send_message("❌ **Error saat menyimpan data userbot!**")         
+    except Exception as e:
+        await conv.send_message(f"❌ **Error tidak terduga:** `{str(e)}`")   
+    finally:
+        if client:
+            try:
+                await client.disconnect()
+            except Exception as e:
+                logger.error(f"Error disconnecting client: {str(e)}")
 
     async def show_userbot_list(self, event, page=0):
         """Show list of userbots with pagination"""
