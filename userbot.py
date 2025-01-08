@@ -1,11 +1,11 @@
-from telethon import TelegramClient, events, utils
+from telethon import TelegramClient, events,utils
 from telethon.tl.types import InputPeerChannel
 from telethon.errors import RPCError, FloodWaitError, ChatWriteForbiddenError
 from telethon.sessions import StringSession
 import asyncio
 import os
 import sys
-from typing import Dict, List
+from typing import Dict
 from datetime import datetime
 import logging
 
@@ -38,12 +38,12 @@ class Userbot:
                                    device_model="Userbot v1.0")
         self.banned_groups = set()
         self.forward_tasks: Dict[str, ForwardTask] = {}  # key: task_id (chat_id_msg_id)
-        
+
     async def start(self):
         """Start userbot and register handlers"""
         await self.client.start()
         print("Userbot started successfully!")
-        
+
         @self.client.on(events.NewMessage(pattern=r'(?i)[!/\.]help$'))
         async def help_handler(event):
             if event.sender_id != event.client.uid:
@@ -76,14 +76,12 @@ class Userbot:
 ❗️ Jika ada masalah, gunakan .stop untuk hentikan semua task
 """
             await event.reply(help_text, parse_mode='md')
-            
-            @self.client.on(events.NewMessage(pattern=r'[!/\.]hiyaok'))
-            async def hiyaok_handler(event): 
-                if event.sender_id != event.client.uid:
-                    return
-                # ... (kode selanjutnya) ...
 
-                
+        @self.client.on(events.NewMessage(pattern=r'[!/\.]hiyaok'))
+        async def hiyaok_handler(event):
+            if event.sender_id != event.client.uid:
+                return
+
             if not event.is_reply:
                 await event.reply("""
 ❌ **Error:** Harap reply ke pesan yang ingin diforward
@@ -93,7 +91,7 @@ Contoh penggunaan:
 2. Ketik: `.hiyaok 5` (delay 5 menit)
                 """, parse_mode='md')
                 return
-            
+
             # Check if maximum tasks reached
             if len(self.forward_tasks) >= 10:
                 await event.reply("""
@@ -120,8 +118,8 @@ Format command:
 Example: `.hiyaok 5`
                     """, parse_mode='md')
                     return
-             except ValueError:
-                 await event.reply("""
+            except ValueError:
+                await event.reply("""
 ❌ **Error:** Format command tidak valid
 
 Penggunaan yang benar:
@@ -199,7 +197,7 @@ Gunakan `.detail` untuk cek status
                     runtime = datetime.now() - task.start_time
                     hours, remainder = divmod(runtime.seconds, 3600)
                     minutes, seconds = divmod(remainder, 60)
-                    
+
                     status = f"""
 📊 **Forward Status:**
 🆔 Task ID: `{task_id}`
@@ -305,15 +303,15 @@ Task akan dilanjutkan dalam {task.delay} menit...
         async def setdelay_handler(event):
             if event.sender_id != event.client.uid:
                 return
-                
+
             try:
                 args = event.text.split()
                 if len(args) != 3:
                     raise ValueError
-                    
+
                 task_id = args[1]
                 delay = int(args[2])
-                
+
                 if delay < 1:
                     await event.reply("""
 ⚠️ **Error:** Delay minimal 1 menit
@@ -341,12 +339,12 @@ Penggunaan:
 • `.setdelay <task_id> <minutes>`
 • Example: `.setdelay 123_456 5`
                 """, parse_mode='md')
-                
-                @self.client.on(events.NewMessage(pattern=r'[!/\.]stop'))
+
+        @self.client.on(events.NewMessage(pattern=r'[!/\.]stop'))
         async def stop_handler(event):
             if event.sender_id != event.client.uid:
                 return
-                
+
             stopped_count = len(self.forward_tasks)
             if stopped_count == 0:
                 await event.reply("ℹ️ Tidak ada task yang aktif.", parse_mode='md')
@@ -357,7 +355,7 @@ Penggunaan:
                 runtime = datetime.now() - task.start_time
                 hours, remainder = divmod(runtime.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
-                
+
                 task_details.append(f"""
 🆔 Task ID: `{task_id}`
 📊 Stats:
@@ -367,7 +365,7 @@ Penggunaan:
                 task.running = False
 
             self.forward_tasks.clear()
-                
+
             await event.reply(f"""
 🛑 **Menghentikan {stopped_count} forward task**
 
@@ -378,7 +376,7 @@ Penggunaan:
         async def delforward_handler(event):
             if event.sender_id != event.client.uid:
                 return
-                
+
             try:
                 task_id = event.text.split()[1]
                 if task_id in self.forward_tasks:
@@ -386,10 +384,10 @@ Penggunaan:
                     runtime = datetime.now() - task.start_time
                     hours, remainder = divmod(runtime.seconds, 3600)
                     minutes, seconds = divmod(remainder, 60)
-                    
+
                     task.running = False
                     del self.forward_tasks[task_id]
-                    
+
                     await event.reply(f"""
 ✅ **Forward task dihapus!**
 
@@ -418,7 +416,7 @@ Penggunaan:
         async def listgrup_handler(event):
             if event.sender_id != event.client.uid:
                 return
-                
+
             groups = []
             async for dialog in self.client.iter_dialogs():
                 if dialog.is_group:
@@ -437,24 +435,24 @@ Penggunaan:
 👥 Members: Error counting
 ⚠️ Error: {str(e)}
                         """)
-            
+
             groups_text = "\n".join(groups)
-            
+
             if len(groups_text) > 4000:
                 # Split into multiple messages if too long
                 message_parts = []
                 current_part = "📋 **Daftar Grup:**\n"
-                
+
                 for group in groups:
                     if len(current_part) + len(group) > 4000:
                         message_parts.append(current_part)
                         current_part = "📋 **Daftar Grup (Lanjutan):**\n" + group
                     else:
                         current_part += group
-                
+
                 if current_part:
                     message_parts.append(current_part)
-                
+
                 for part in message_parts:
                     await event.reply(part, parse_mode='md')
             else:
@@ -462,12 +460,12 @@ Penggunaan:
                     f"📋 **Daftar Grup:**\n{groups_text}",
                     parse_mode='md'
                 )
-                
-                @self.client.on(events.NewMessage(pattern=r'[!/\.]ban'))
+
+        @self.client.on(events.NewMessage(pattern=r'[!/\.]ban'))
         async def ban_handler(event):
             if event.sender_id != event.client.uid:
                 return
-                
+
             if event.is_group:
                 if event.chat_id not in self.banned_groups:
                     self.banned_groups.add(event.chat_id)
@@ -490,11 +488,11 @@ Gunakan `.deleteban` di grup ini untuk unban.
         async def listban_handler(event):
             if event.sender_id != event.client.uid:
                 return
-                
+
             if not self.banned_groups:
                 await event.reply("📋 **Tidak ada grup yang di-ban**", parse_mode='md')
                 return
-                
+
             banned = []
             for group_id in self.banned_groups:
                 try:
@@ -502,7 +500,7 @@ Gunakan `.deleteban` di grup ini untuk unban.
                     banned.append(f"• {group.title} (`{group_id}`)")
                 except:
                     banned.append(f"• Unknown Group (`{group_id}`)")
-            
+
             await event.reply(f"""
 📋 **Daftar Grup yang Di-ban:**
 {chr(10).join(banned)}
@@ -514,7 +512,7 @@ Total: `{len(self.banned_groups)}` grup
         async def deleteban_handler(event):
             if event.sender_id != event.client.uid:
                 return
-                
+
             if event.is_group:
                 if event.chat_id in self.banned_groups:
                     self.banned_groups.remove(event.chat_id)
