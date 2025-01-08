@@ -8,6 +8,7 @@ import sys
 from typing import Dict
 from datetime import datetime
 import logging
+import time
 
 # Configure logging
 logging.basicConfig(
