@@ -1,7 +1,5 @@
-# admin_bot.py
-
 from telethon import TelegramClient, events, Button, types
-from telethon.tl.functions.users import GetFullUser 
+from telethon.tl.functions.users import GetFullUserRequest
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, FloodWaitError
 from config import API_ID, API_HASH, BOT_TOKEN, ADMIN_IDS, APP_VERSION
@@ -17,7 +15,6 @@ import subprocess
 import signal
 from pathlib import Path
 
-# Konfigurasi logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -26,16 +23,15 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
+
 logger = logging.getLogger(__name__)
 
 class UserBotManager:
     def __init__(self):
-        self.running_bots = {}  # {user_id: process}
-        
+        self.running_bots = {}
+
     async def start_userbot(self, session_string, api_id, api_hash):
-        """Start userbot process"""
         try:
-            # Create command to run userbot
             cmd = [
                 sys.executable,
                 "userbot.py",
@@ -43,49 +39,40 @@ class UserBotManager:
                 str(api_id),
                 api_hash
             ]
-            
-            # Start process
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
-            
-            # Wait a bit to check if process started successfully
             await asyncio.sleep(5)
-            
-            if process.poll() is None:  # Process still running
+            if process.poll() is None:
                 return True, process
             else:
-                # Get error if process failed
                 _, stderr = process.communicate()
                 return False, stderr.decode()
-                
         except Exception as e:
             return False, str(e)
-            
+
     def stop_userbot(self, process):
-        """Stop userbot process"""
         try:
             process.send_signal(signal.SIGTERM)
             process.wait(timeout=5)
         except:
-            process.kill()  # Force kill if graceful shutdown fails
+            process.kill()
 
 def load_data():
-    """Load data from JSON file with error handling"""
     try:
         with open('data.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
-            default_data = {
-                'userbots': {},
-                'premium_users': {},
-                'users': {}
-            }
-            for key, value in default_data.items():
-                if key not in data:
-                    data[key] = value
-            return data
+        default_data = {
+            'userbots': {},
+            'premium_users': {},
+            'users': {}
+        }
+        for key, value in default_data.items():
+            if key not in data:
+                data[key] = value
+        return data
     except FileNotFoundError:
         default_data = {'userbots': {}, 'premium_users': {}, 'users': {}}
         save_data(default_data)
@@ -95,7 +82,6 @@ def load_data():
         return {'userbots': {}, 'premium_users': {}, 'users': {}}
 
 def save_data(data):
-    """Save data to JSON file with error handling"""
     try:
         with open('data.json', 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
@@ -105,7 +91,6 @@ def save_data(data):
         return False
 
 def is_premium(user_id):
-    """Check if user has premium status"""
     data = load_data()
     str_id = str(user_id)
     if str_id in data.get('premium_users', {}):
@@ -121,7 +106,6 @@ def is_premium(user_id):
     return False
 
 def save_user(user_id, username=None):
-    """Save new user to database"""
     data = load_data()
     str_id = str(user_id)
     if str_id not in data['users']:
@@ -133,22 +117,16 @@ def save_user(user_id, username=None):
         save_data(data)
 
 async def verify_session(session_str, api_id, api_hash):
-    """Verify if a session is valid and working"""
     client = None
     try:
         client = TelegramClient(StringSession(session_str), api_id, api_hash)
         await client.connect()
-        
         if not await client.is_user_authorized():
             return False
-            
-        # Test basic functionality
         me = await client.get_me()
         if not me:
             return False
-            
         return True
-        
     except Exception as e:
         logger.error(f"Session verification error: {str(e)}")
         return False
@@ -170,7 +148,7 @@ class AdminBot:
 📚 **Panduan Penggunaan Bot**
 
 Silahkan pilih kategori bantuan di bawah ini:
-                """,
+""",
                 'buttons': [
                     [Button.inline("🤖 Manajemen Userbot", "help_userbot")],
                     [Button.inline("⚙️ Pengaturan", "help_settings")],
@@ -182,6 +160,7 @@ Silahkan pilih kategori bantuan di bawah ini:
 🤖 **Panduan Manajemen Userbot**
 
 **Perintah Tersedia:**
+
 • `/start` - Memulai bot dan membuat userbot baru
 • `/cek` - Mengecek status userbot (Admin)
 • `/hapus` - Menghapus userbot
@@ -191,6 +170,7 @@ Silahkan pilih kategori bantuan di bawah ini:
 • `/restart` - Restart userbot jika ada masalah
 
 **Perintah Userbot:**
+
 • `.help` - Menampilkan bantuan userbot
 • `.hiyaok` - Memulai forward pesan
 • `.listgrup` - Melihat daftar grup
@@ -198,10 +178,11 @@ Silahkan pilih kategori bantuan di bawah ini:
 • `.stop` - Menghentikan semua forward
 
 **Catatan:**
+
 • Semua perintah mendukung awalan `/`, `!`, dan `.`
 • User premium hanya dapat membuat 1 userbot
 • Durasi userbot premium otomatis 30 hari
-                """,
+""",
                 'buttons': [
                     [Button.inline("◀️ Kembali", "help_main")],
                     [Button.inline("❌ Tutup", "help_close")]
@@ -212,6 +193,7 @@ Silahkan pilih kategori bantuan di bawah ini:
 ⚙️ **Panduan Pengaturan**
 
 **Fitur:**
+
 • Toggle status userbot dengan sekali klik
 • Konfirmasi sebelum penghapusan
 • Pembersihan otomatis sesi yang tidak terpakai
@@ -221,11 +203,12 @@ Silahkan pilih kategori bantuan di bawah ini:
 • Auto-restart userbot
 
 **Tips:**
+
 • Selalu cek status sebelum membuat userbot baru
 • Backup data secara berkala
 • Monitor masa aktif userbot premium
 • Gunakan /restart jika userbot bermasalah
-                """,
+""",
                 'buttons': [
                     [Button.inline("◀️ Kembali", "help_main")],
                     [Button.inline("❌ Tutup", "help_close")]
@@ -234,119 +217,104 @@ Silahkan pilih kategori bantuan di bawah ini:
         }
 
     async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
-    """Create new userbot session with enhanced error handling"""
-    client = None
-    
-    try:
-        # Validate inputs
+        client = None
         try:
-            api_id = int(api_id)
-        except ValueError:
-            await conv.send_message("❌ **Error: API ID harus berupa angka!**")
-            return
-
-        # Check if phone number already has a userbot
-        data = load_data()
-        for bot_info in data['userbots'].values():
-            if bot_info['phone'] == phone:
-                await conv.send_message("❌ **Error: Nomor telepon ini sudah memiliki userbot!**")
+            try:
+                api_id = int(api_id)
+            except ValueError:
+                await conv.send_message("❌ **Error: API ID harus berupa angka!**")
                 return
 
-        # Create client and connect
-        client = TelegramClient(StringSession(), api_id, api_hash, device_model=APP_VERSION)
-        await client.connect()
-        
-        await conv.send_message("⏳ **Memproses permintaan login...**")
+            data = load_data()
+            for bot_info in data['userbots'].values():
+                if bot_info['phone'] == phone:
+                    await conv.send_message("❌ **Error: Nomor telepon ini sudah memiliki userbot!**")
+                    return
 
-        try:
-            code = await client.send_code_request(phone)
-        except FloodWaitError as e:
-            wait_time = str(timedelta(seconds=e.seconds))
-            await conv.send_message(f"❌ **Terlalu banyak percobaan! Silahkan tunggu {wait_time} sebelum mencoba lagi.**")
-            return
-        
-        await conv.send_message("""
+            client = TelegramClient(StringSession(), api_id, api_hash, device_model=APP_VERSION)
+            await client.connect()
+            await conv.send_message("⏳ **Memproses permintaan login...**")
+            try:
+                code = await client.send_code_request(phone)
+            except FloodWaitError as e:
+                wait_time = str(timedelta(seconds=e.seconds))
+                await conv.send_message(f"❌ **Terlalu banyak percobaan! Silahkan tunggu {wait_time} sebelum mencoba lagi.**")
+                return
+            await conv.send_message("""
 📲 **Masukkan kode OTP**
 
 Format: 1 2 3 4 5 (pisahkan dengan spasi)
-
 ⏳ Waktu: 5 menit
-        """)
-
-        try:
-            otp_msg = await conv.get_response(timeout=300)
-            otp = ''.join(otp_msg.text.split())
-        except asyncio.TimeoutError:
-            await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
-            return
-
-        try:
-            await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
-        except PhoneCodeInvalidError:
-            await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
-            return
-        
-        except SessionPasswordNeededError:
-            await conv.send_message("🔐 **Akun ini menggunakan verifikasi 2 langkah. Silahkan masukkan password:**")
-            
+""")
             try:
-                password = await conv.get_response(timeout=300)
-                await client.sign_in(password=password.text)
+                otp_msg = await conv.get_response(timeout=300)
+                otp = ''.join(otp_msg.text.split())
             except asyncio.TimeoutError:
                 await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
                 return
-        
-        me = await client.get_me()
-        session_string = client.session.save()
 
-        # Test if session works
-        is_working = await verify_session(session_string, api_id, api_hash)
-        if not is_working:
-            await conv.send_message("❌ **Error: Gagal memverifikasi sesi userbot. Silahkan coba lagi.**")
-            return
-        
-        # Save userbot data
-        data = load_data()
-        expiry_date = (datetime.now() + timedelta(days=duration)).isoformat()
+            try:
+                await client.sign_in(phone=phone, code=otp, phone_code_hash=code.phone_code_hash)
+            except PhoneCodeInvalidError:
+                await conv.send_message("❌ **Kode OTP tidak valid! Silahkan coba lagi.**")
+                return
+            except SessionPasswordNeededError:
+                await conv.send_message("🔐 **Akun ini menggunakan verifikasi 2 langkah. Silahkan masukkan password:**")
+                try:
+                    password = await conv.get_response(timeout=300)
+                    await client.sign_in(password=password.text)
+                except asyncio.TimeoutError:
+                    await conv.send_message("❌ **Waktu habis! Silahkan coba lagi.**")
+                    return
 
-        data['userbots'][str(me.id)] = {
-            'first_name': me.first_name,
-            'last_name': me.last_name,
-            'phone': phone,
-            'created_at': datetime.now().isoformat(),
-            'expires_at': expiry_date,
-            'active': True,
-            'session': session_string,
-            'owner_id': owner_id,
-            'api_id': api_id,
-            'api_hash': api_hash
-        }
-        
-        if save_data(data):
-            # Start the userbot
-            success, result = await self.userbot_manager.start_userbot(
-                session_string,
-                api_id,
-                api_hash
-            )
-            
-            if not success:
-                error_msg = f"""
+            me = await client.get_me()
+            session_string = client.session.save()
+
+            is_working = await verify_session(session_string, api_id, api_hash)
+            if not is_working:
+                await conv.send_message("❌ **Error: Gagal memverifikasi sesi userbot. Silahkan coba lagi.**")
+                return
+
+            data = load_data()
+            expiry_date = (datetime.now() + timedelta(days=duration)).isoformat()
+            data['userbots'][str(me.id)] = {
+                'first_name': me.first_name,
+                'last_name': me.last_name,
+                'phone': phone,
+                'created_at': datetime.now().isoformat(),
+                'expires_at': expiry_date,
+                'active': True,
+                'session': session_string,
+                'owner_id': owner_id,
+                'api_id': api_id,
+                'api_hash': api_hash
+            }
+
+            if save_data(data):
+                success, result = await self.userbot_manager.start_userbot(
+                    session_string,
+                    api_id,
+                    api_hash
+                )
+
+                if not success:
+                    error_msg = f"""
 ❌ **Error saat menjalankan userbot:**
+
 `{result}`
 
 Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
-                """
-                await conv.send_message(error_msg)
-                return
-                
-            # Save process
-            self.userbot_manager.running_bots[str(me.id)] = result
-            
-            success_text = f"""
-🤖 **User   bot berhasil dibuat dan dijalankan!**
+"""
+                    await conv.send_message(error_msg)
+                    return
+
+                self.userbot_manager.running_bots[str(me.id)] = result
+
+                success_text = f"""
+🤖 **User bot berhasil dibuat dan dijalankan!**
 
 👤 **Detail Userbot:**
+
 • First Name: `{me.first_name}`
 • Last Name: `{me.last_name or 'N/A'}`
 • User ID: `{me.id}`
@@ -357,62 +325,61 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
 ✅ **Status: Aktif dan Berjalan**
 
 📱 **Perintah Tersedia:**
+
 • .help - Lihat bantuan
-• .hiyaok - Mulai forward message 
+• .hiyaok - Mulai forward message
 • .listgrup - Lihat daftar grup
 • .ban - Ban grup dari forward
 • .stop - Stop semua forward
 
 ⚠️ **PENTING:**
+
 1. Userbot sudah aktif dan siap digunakan.
 2. Simpan informasi di bawah dengan aman.
 3. Gunakan .help untuk melihat semua perintah.
 4. Jika ada masalah, gunakan /restart.
 
 📝 **String Session (RAHASIAKAN!):**
+
 `{session_string}`
 
 ⚡️ **API Credentials:**
+
 • API ID: `{api_id}`
 • API Hash: `{api_hash}`
 
 🔒 **SIMPAN INFORMASI DI ATAS DENGAN AMAN!**
-            """
-            
-            # Send userbot details
-            await conv.send_message(success_text)
-            
-            # Send back to main menu based on owner ID role.
-            buttons = []
-            if owner_id in ADMIN_IDS:
-                buttons = [
-                    [Button.inline("🤖 Buat Userbot", "create_userbot")],
-                    [Button.inline("👥 Add Premium", "add_premium")],
-                    [Button.inline("📢 Broadcast", "broadcast")],
-                    [Button.inline("❓ Bantuan", "help_main")]
-                ]
+"""
+                await conv.send_message(success_text)
+
+                buttons = []
+                if owner_id in ADMIN_IDS:
+                    buttons = [
+                        [Button.inline("🤖 Buat Userbot", "create_userbot")],
+                        [Button.inline("👥 Add Premium", "add_premium")],
+                        [Button.inline("📢 Broadcast", "broadcast")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    ]
+                else:
+                    buttons = [
+                        [Button.inline("🤖 Cek Status", "check_status")],
+                        [Button.inline("❓ Bantuan", "help_main")]
+                    ]
+
+                await conv.send_message("👋 **Kembali ke menu utama.**", buttons=buttons)
             else:
-                buttons = [
-                    [Button.inline("🤖 Cek Status", "check_status")],
-                    [Button.inline("❓ Bantuan", "help_main")]
-                ]
-            
-            await conv.send_message("👋 **Kembali ke menu utama.**", buttons=buttons)               
-        else:
-            await conv.send_message("❌ **Error saat menyimpan data userbot!**")         
-    except Exception as e:
-        await conv.send_message(f"❌ **Error tidak terduga:** `{str(e)}`")   
-    finally:
-        if client:
-            try:
-                await client.disconnect()
-            except Exception as e:
-                logger.error(f"Error disconnecting client: {str(e)}")
+                await conv.send_message("❌ **Error saat menyimpan data userbot!**")
+        except Exception as e:
+            await conv.send_message(f"❌ **Error tidak terduga:** `{str(e)}`")
+        finally:
+            if client:
+                try:
+                    await client.disconnect()
+                except Exception as e:
+                    logger.error(f"Error disconnecting client: {str(e)}")
 
     async def show_userbot_list(self, event, page=0):
-        """Show list of userbots with pagination"""
         data = load_data()
-        
         if not data['userbots']:
             await event.reply("❌ **Tidak ada userbot yang ditemukan!**")
             return
@@ -421,11 +388,9 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
         total_pages = math.ceil(len(userbots) / self.page_size)
         start_idx = page * self.page_size
         end_idx = start_idx + self.page_size
-        
         current_page_userbots = userbots[start_idx:end_idx]
-        
+
         buttons = []
-        
         for user_id, info in current_page_userbots:
             status = "🟢" if info['active'] else "🔴"
             expires = datetime.fromisoformat(info['expires_at'])
@@ -523,7 +488,7 @@ Silahkan pilih userbot yang ingin dihapus:
     async def start(self):
         """Start the bot and register all handlers"""
         
-                @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]start$'))
+        @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]start$'))
         async def start_handler(event):
             user_id = event.sender_id
             save_user(user_id, event.sender.username)
@@ -539,13 +504,14 @@ Silahkan pilih userbot yang ingin dihapus:
 👋 **Selamat datang Admin!**
 
 Silahkan pilih menu yang tersedia:
+
 • Buat Userbot - Membuat userbot baru
 • Add Premium - Menambah user premium
 • Broadcast - Kirim pesan ke semua user
 • Bantuan - Panduan penggunaan bot
 
 ⚡️ Status: Sistem berjalan normal
-                """, buttons=buttons)
+""", buttons=buttons)
                 return
 
             if is_premium(user_id):
@@ -574,17 +540,17 @@ Silahkan pilih menu yang tersedia:
 
 📦 **Keuntungan Premium:**
 • Buat userbot pribadi
-• Durasi aktif 30 hari
+• Durasi aktif non stop
 • Fitur autoforward
 • Support prioritas
 • Update otomatis
 • Garansi puas
 
 💎 **Harga Paket Premium:**
-• 1 Bulan: Rp XX.XXX
-• 3 Bulan: Rp XX.XXX
-• 6 Bulan: Rp XX.XXX
-• 1 Tahun: Rp XX.XXX
+• 1 Bulan: Rp 10.000
+• 3 Bulan: Rp 30.000
+• 6 Bulan: Rp 60.000
+• 1 Tahun: Rp 100.000
 
 ✨ **Bonus Premium:**
 • Setup gratis
@@ -593,13 +559,13 @@ Silahkan pilih menu yang tersedia:
 • Backup otomatis
 
 👉 **Cara Berlangganan:**
-1. Hubungi admin @admin
+1. Hubungi admin @hiyaok
 2. Pilih paket premium
 3. Lakukan pembayaran
 4. Dapatkan akses instant!
                 """
                 buttons = [
-                    [Button.url("💬 Chat Admin", "https://t.me/admin")],
+                    [Button.url("💬 Chat Admin", "https://t.me/hiyaok")],
                     [Button.inline("❓ Bantuan", "help_main")]
                 ]
 
@@ -788,7 +754,7 @@ Contoh durasi:
                         duration = int(duration_msg.text.strip())
                         if duration < 1:
                             raise ValueError("Durasi minimal 1 hari")
-                                        except ValueError:
+                    except ValueError:
                         await conv.send_message("❌ **Error: Durasi harus berupa angka positif!**")
                         return
                     
@@ -919,7 +885,7 @@ Untuk membuat userbot, Anda memerlukan akses premium.
             """
             buttons = [
                 [Button.url("💬 Chat Admin", "https://t.me/admin")],
-                                [Button.inline("◀️ Kembali ke Menu", "back_to_start")]
+                [Button.inline("◀️ Kembali ke Menu", "back_to_start")]
             ]
             await event.edit(text, buttons=buttons)
 
@@ -1042,7 +1008,7 @@ Contoh durasi:
                             
                         try:
                             duration = int(duration_msg.text.strip())
-                                                        if duration < 1:
+                            if duration < 1:
                                 raise ValueError("Durasi minimal 1 hari")
                         except ValueError:
                             await conv.send_message("❌ **Error: Durasi harus berupa angka positif!**")
@@ -1169,7 +1135,7 @@ Silahkan hubungi admin untuk perpanjang durasi.
                                     await self.bot.send_message(owner_id, text)
                                 except:
                                     pass
-                                                 except (ValueError, KeyError):
+                        except (ValueError, KeyError):
                             continue
                     
                     if expired:
@@ -1191,3 +1157,8 @@ Silahkan hubungi admin untuk perpanjang durasi.
         await self.bot.start(bot_token=BOT_TOKEN)
         logger.info("Admin bot started.")
         await self.bot.run_until_disconnected()
+
+# Run the bot
+if __name__ == "__main__":
+    bot = AdminBot()
+    asyncio.run(bot.start())
