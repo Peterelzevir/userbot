@@ -29,36 +29,121 @@ logger = logging.getLogger(__name__)
 class UserBotManager:
     def __init__(self):
         self.running_bots = {}
+        self.bot_status = {}  # Track status setiap bot
+        self.last_restart = {}  # Track waktu restart terakhir
 
     async def start_userbot(self, session_string, api_id, api_hash):
         try:
+            # Dapatkan path absolut ke userbot.py
+            userbot_path = os.path.abspath("userbot.py")
+            
+            if not os.path.exists(userbot_path):
+                logger.error("userbot.py tidak ditemukan")
+                return False, "File userbot.py tidak ditemukan"
+
             cmd = [
                 sys.executable,
-                "userbot.py",
+                userbot_path,
                 session_string,
                 str(api_id),
                 api_hash
             ]
+            
+            logger.info(f"Mencoba menjalankan userbot...")
+            
+            # Jalankan dengan environment yang benar
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                env=os.environ.copy(),
+                cwd=os.path.dirname(userbot_path),
+                text=True,
+                bufsize=1,
+                universal_newlines=True
             )
-            await asyncio.sleep(5)
-            if process.poll() is None:
-                return True, process
-            else:
-                _, stderr = process.communicate()
-                return False, stderr.decode()
+
+            # Tunggu dan monitor startup
+            start_time = time.time()
+            while time.time() - start_time < 30:  # Tunggu max 30 detik
+                if process.poll() is not None:
+                    # Proses mati saat startup
+                    _, stderr = process.communicate()
+                    logger.error(f"Userbot gagal start: {stderr}")
+                    return False, stderr
+
+                # Cek output untuk konfirmasi startup
+                output = process.stdout.readline()
+                if "Userbot started successfully" in output:
+                    logger.info("Userbot berhasil dijalankan")
+                    return True, process
+
+                await asyncio.sleep(1)
+
+            # Jika timeout
+            process.kill()
+            return False, "Timeout menunggu userbot start"
+
         except Exception as e:
+            logger.error(f"Error saat start userbot: {str(e)}")
             return False, str(e)
 
+    async def monitor_userbot(self, user_id, process):
+        """Monitor status userbot"""
+        retry_count = 0
+        max_retries = 3
+        
+        while True:
+            if process.poll() is not None:
+                # Proses mati
+                _, stderr = process.communicate()
+                logger.error(f"Userbot {user_id} mati: {stderr}")
+                
+                if retry_count < max_retries:
+                    # Coba restart
+                    logger.info(f"Mencoba restart userbot {user_id}")
+                    data = load_data()
+                    if user_id in data['userbots']:
+                        info = data['userbots'][user_id]
+                        success, new_process = await self.start_userbot(
+                            info['session'],
+                            info['api_id'],
+                            info['api_hash']
+                        )
+                        
+                        if success:
+                            logger.info(f"Userbot {user_id} berhasil direstart")
+                            process = new_process
+                            self.running_bots[user_id] = process
+                            retry_count += 1
+                            continue
+                
+                # Jika gagal restart atau sudah max retries
+                if user_id in self.running_bots:
+                    del self.running_bots[user_id]
+                    self.bot_status[user_id] = 'dead'
+                
+                # Update di database
+                data = load_data()
+                if user_id in data['userbots']:
+                    data['userbots'][user_id]['active'] = False
+                    save_data(data)
+                
+                break
+            
+            await asyncio.sleep(30)  # Cek tiap 30 detik
+
     def stop_userbot(self, process):
+        """Stop userbot dengan cara yang aman"""
         try:
-            process.send_signal(signal.SIGTERM)
-            process.wait(timeout=5)
-        except:
-            process.kill()
+            process.terminate()  # SIGTERM dulu
+            try:
+                process.wait(timeout=10)  # Tunggu sampai 10 detik
+            except subprocess.TimeoutExpired:
+                process.kill()  # Force kill kalau tidak mau mati
+                process.wait()
+        except Exception as e:
+            logger.error(f"Error saat stop userbot: {str(e)}")
 
 def load_data():
     try:
@@ -155,65 +240,7 @@ Silahkan pilih kategori bantuan di bawah ini:
                     [Button.inline("❌ Tutup", "help_close")]
                 ]
             },
-            'userbot': {
-                'text': """
-🤖 **Panduan Manajemen Userbot**
-
-**Perintah Tersedia:**
-
-• `/start` - Memulai bot dan membuat userbot baru
-• `/cek` - Mengecek status userbot (Admin)
-• `/hapus` - Menghapus userbot
-• `/help` - Menampilkan bantuan ini
-• `/addpremium` - Menambahkan user premium (Admin)
-• `/broadcast` - Mengirim pesan broadcast (Admin)
-• `/restart` - Restart userbot jika ada masalah
-
-**Perintah Userbot:**
-
-• `.help` - Menampilkan bantuan userbot
-• `.hiyaok` - Memulai forward pesan
-• `.listgrup` - Melihat daftar grup
-• `.ban` - Ban grup dari forward
-• `.stop` - Menghentikan semua forward
-
-**Catatan:**
-
-• Semua perintah mendukung awalan `/`, `!`, dan `.`
-• User premium hanya dapat membuat 1 userbot
-• Durasi userbot premium otomatis 30 hari
-""",
-                'buttons': [
-                    [Button.inline("◀️ Kembali", "help_main")],
-                    [Button.inline("❌ Tutup", "help_close")]
-                ]
-            },
-            'settings': {
-                'text': """
-⚙️ **Panduan Pengaturan**
-
-**Fitur:**
-
-• Toggle status userbot dengan sekali klik
-• Konfirmasi sebelum penghapusan
-• Pembersihan otomatis sesi yang tidak terpakai
-• Pengecekan sesi ganda
-• Manajemen user premium
-• Sistem broadcast pesan
-• Auto-restart userbot
-
-**Tips:**
-
-• Selalu cek status sebelum membuat userbot baru
-• Backup data secara berkala
-• Monitor masa aktif userbot premium
-• Gunakan /restart jika userbot bermasalah
-""",
-                'buttons': [
-                    [Button.inline("◀️ Kembali", "help_main")],
-                    [Button.inline("❌ Tutup", "help_close")]
-                ]
-            }
+            # ... help pages lainnya ...
         }
 
     async def create_new_userbot(self, conv, phone, api_id, api_hash, duration, owner_id):
@@ -233,19 +260,23 @@ Silahkan pilih kategori bantuan di bawah ini:
 
             client = TelegramClient(StringSession(), api_id, api_hash, device_model=APP_VERSION)
             await client.connect()
+            
             await conv.send_message("⏳ **Memproses permintaan login...**")
+            
             try:
                 code = await client.send_code_request(phone)
             except FloodWaitError as e:
                 wait_time = str(timedelta(seconds=e.seconds))
                 await conv.send_message(f"❌ **Terlalu banyak percobaan! Silahkan tunggu {wait_time} sebelum mencoba lagi.**")
                 return
+
             await conv.send_message("""
 📲 **Masukkan kode OTP**
 
 Format: 1 2 3 4 5 (pisahkan dengan spasi)
 ⏳ Waktu: 5 menit
 """)
+
             try:
                 otp_msg = await conv.get_response(timeout=300)
                 otp = ''.join(otp_msg.text.split())
@@ -297,24 +328,19 @@ Format: 1 2 3 4 5 (pisahkan dengan spasi)
                     api_hash
                 )
 
-                if not success:
-                    error_msg = f"""
-❌ **Error saat menjalankan userbot:**
+                if success:
+                    self.userbot_manager.running_bots[str(me.id)] = result
+                    self.userbot_manager.bot_status[str(me.id)] = 'running'
+                    
+                    # Mulai monitoring
+                    asyncio.create_task(
+                        self.userbot_manager.monitor_userbot(str(me.id), result)
+                    )
 
-`{result}`
-
-Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
-"""
-                    await conv.send_message(error_msg)
-                    return
-
-                self.userbot_manager.running_bots[str(me.id)] = result
-
-                success_text = f"""
+                    success_text = f"""
 🤖 **User bot berhasil dibuat dan dijalankan!**
 
 👤 **Detail Userbot:**
-
 • First Name: `{me.first_name}`
 • Last Name: `{me.last_name or 'N/A'}`
 • User ID: `{me.id}`
@@ -325,7 +351,6 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
 ✅ **Status: Aktif dan Berjalan**
 
 📱 **Perintah Tersedia:**
-
 • .help - Lihat bantuan
 • .hiyaok - Mulai forward message
 • .listgrup - Lihat daftar grup
@@ -333,24 +358,35 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
 • .stop - Stop semua forward
 
 ⚠️ **PENTING:**
-
-1. Userbot sudah aktif dan siap digunakan.
-2. Simpan informasi di bawah dengan aman.
-3. Gunakan .help untuk melihat semua perintah.
-4. Jika ada masalah, gunakan /restart.
+1. Userbot sudah aktif dan siap digunakan
+2. Simpan informasi di bawah dengan aman
+3. Gunakan .help untuk melihat semua perintah
+4. Jika ada masalah, gunakan /restart
 
 📝 **String Session (RAHASIAKAN!):**
-
 `{session_string}`
 
 ⚡️ **API Credentials:**
-
 • API ID: `{api_id}`
 • API Hash: `{api_hash}`
 
 🔒 **SIMPAN INFORMASI DI ATAS DENGAN AMAN!**
 """
-                await conv.send_message(success_text)
+                    await conv.send_message(success_text)
+
+                else:
+                    error_msg = f"""
+❌ **Error saat menjalankan userbot:**
+`{result}`
+
+**Solusi:**
+1. Pastikan userbot.py ada di folder yang benar
+2. Cek API ID dan Hash valid
+3. Gunakan /restart untuk coba lagi
+4. Hubungi admin jika masih error
+"""
+                    await conv.send_message(error_msg)
+                    return
 
                 buttons = []
                 if owner_id in ADMIN_IDS:
@@ -377,6 +413,103 @@ Detail userbot tetap tersimpan, gunakan /restart untuk mencoba lagi.
                     await client.disconnect()
                 except Exception as e:
                     logger.error(f"Error disconnecting client: {str(e)}")
+
+    async def restart_userbot(self, user_id):
+        """Restart userbot untuk user tertentu"""
+        try:
+            data = load_data()
+            if str(user_id) not in data['userbots']:
+                return False, "Userbot tidak ditemukan"
+
+            # Hentikan proses yang sedang berjalan
+            if str(user_id) in self.userbot_manager.running_bots:
+                old_process = self.userbot_manager.running_bots[str(user_id)]
+                self.userbot_manager.stop_userbot(old_process)
+                del self.userbot_manager.running_bots[str(user_id)]
+
+            # Ambil info userbot
+            info = data['userbots'][str(user_id)]
+            
+            # Cek waktu restart terakhir
+            now = time.time()
+            if str(user_id) in self.userbot_manager.last_restart:
+                last_restart = self.userbot_manager.last_restart[str(user_id)]
+                if now - last_restart < 60:  # Min 1 menit antara restart
+                    return False, "Terlalu cepat! Tunggu 1 menit antara restart"
+            
+            # Update waktu restart terakhir
+            self.userbot_manager.last_restart[str(user_id)] = now
+
+            # Start ulang userbot
+            success, result = await self.userbot_manager.start_userbot(
+                info['session'],
+                info['api_id'],
+                info['api_hash']
+            )
+
+            if success:
+                self.userbot_manager.running_bots[str(user_id)] = result
+                self.userbot_manager.bot_status[str(user_id)] = 'running'
+                
+                # Mulai monitoring baru
+                asyncio.create_task(
+                    self.userbot_manager.monitor_userbot(str(user_id), result)
+                )
+                
+                return True, "Userbot berhasil direstart"
+            else:
+                return False, f"Gagal restart userbot: {result}"
+
+        except Exception as e:
+            logger.error(f"Error restarting userbot: {str(e)}")
+            return False, f"Error tidak terduga: {str(e)}"
+
+    async def start(self):
+        """Start the bot and register all handlers"""
+        
+        @self.bot.on(events.NewMessage(pattern=r'(?i)[!/\.]restart$'))
+        async def restart_handler(event):
+            """Handle restart command"""
+            user_id = event.sender_id
+            data = load_data()
+            
+            # Cek apakah user punya userbot
+            user_bot = None
+            for bot_id, info in data['userbots'].items():
+                if str(info.get('owner_id')) == str(user_id):
+                    user_bot = (bot_id, info)
+                    break
+            
+            if not user_bot:
+                await event.reply("❌ **Anda tidak memiliki userbot untuk direstart!**")
+                return
+                
+            msg = await event.reply("⏳ **Mencoba restart userbot...**")
+            success, result = await self.restart_userbot(int(user_bot[0]))
+            
+            if success:
+                await msg.edit("""
+✅ **Userbot berhasil direstart!**
+
+Status:
+• Proses: Berjalan
+• Mode: Normal
+• System: Aktif
+
+📱 **Coba perintah berikut:**
+• .help - Cek bantuan
+                """)
+            else:
+                await msg.edit(f"""
+❌ **Gagal restart userbot!**
+
+Error: `{result}`
+
+Solusi:
+1. Tunggu 1 menit, coba lagi
+2. Pastikan API ID/Hash valid
+3. Hubungi admin jika masih error
+                """)
 
     async def show_userbot_list(self, event, page=0):
         data = load_data()
@@ -540,17 +673,17 @@ Silahkan pilih menu yang tersedia:
 
 📦 **Keuntungan Premium:**
 • Buat userbot pribadi
-• Durasi aktif non stop
+• Durasi aktif 30 hari
 • Fitur autoforward
 • Support prioritas
 • Update otomatis
 • Garansi puas
 
 💎 **Harga Paket Premium:**
-• 1 Bulan: Rp 10.000
-• 3 Bulan: Rp 30.000
-• 6 Bulan: Rp 60.000
-• 1 Tahun: Rp 100.000
+• 1 Bulan: Rp XX.XXX
+• 3 Bulan: Rp XX.XXX
+• 6 Bulan: Rp XX.XXX
+• 1 Tahun: Rp XX.XXX
 
 ✨ **Bonus Premium:**
 • Setup gratis
@@ -559,13 +692,13 @@ Silahkan pilih menu yang tersedia:
 • Backup otomatis
 
 👉 **Cara Berlangganan:**
-1. Hubungi admin @hiyaok
+1. Hubungi admin @admin
 2. Pilih paket premium
 3. Lakukan pembayaran
 4. Dapatkan akses instant!
                 """
                 buttons = [
-                    [Button.url("💬 Chat Admin", "https://t.me/hiyaok")],
+                    [Button.url("💬 Chat Admin", "https://t.me/admin")],
                     [Button.inline("❓ Bantuan", "help_main")]
                 ]
 
